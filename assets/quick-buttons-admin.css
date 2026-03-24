@@ -1,0 +1,172 @@
+/**
+ * Quick Buttons Plugin - Admin Config Styles v2.0
+ *
+ * Styles for the per-department widget configuration matrix.
+ */
+
+/* ---- Wider Dropdowns ---- */
+.form-field select {
+    min-width: 300px;
+}
+
+/* ---- Widget Config Matrix ---- */
+.qa-widget-matrix {
+    margin: 10px 0;
+    overflow-x: auto;
+}
+
+.qa-matrix-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    min-width: 800px;
+}
+
+.qa-matrix-table thead th {
+    background: #f5f5f5;
+    border: 1px solid #ddd;
+    padding: 8px 10px;
+    text-align: left;
+    font-weight: 600;
+    font-size: 12px;
+    color: #555;
+    white-space: nowrap;
+}
+
+.qa-matrix-table tbody td {
+    border: 1px solid #e8e8e8;
+    padding: 6px 8px;
+    vertical-align: middle;
+}
+
+/* Column widths */
+.qa-col-dept { width: 160px; }
+.qa-col-enabled { width: 60px; text-align: center; }
+.qa-col-status { width: auto; }
+.qa-col-dept-sel { width: auto; }
+
+/* Department name cell */
+.qa-cell-dept {
+    font-weight: 500;
+    color: #333;
+    white-space: nowrap;
+}
+
+/* Enabled checkbox cell */
+.qa-cell-enabled {
+    text-align: center !important;
+}
+
+.qa-cell-enabled input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+}
+
+/* Select dropdowns in matrix */
+.qa-cell-select select {
+    width: 100%;
+    min-width: 140px !important;
+    padding: 4px 6px;
+    font-size: 12px;
+    border: 1px solid #ccc;
+    border-radius: 3px;
+    background: #fff;
+}
+
+.qa-cell-select select:focus {
+    border-color: #128DBE;
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(18, 141, 190, 0.15);
+}
+
+/* Disabled row styling */
+.qa-row-disabled td {
+    background: #fafafa;
+}
+
+.qa-row-disabled .qa-cell-dept {
+    color: #999;
+}
+
+.qa-row-disabled select {
+    opacity: 0.4;
+    pointer-events: none;
+}
+
+/* Alternating row colors */
+.qa-matrix-row:nth-child(even) td {
+    background: #fbfbfb;
+}
+
+.qa-matrix-row:nth-child(even).qa-row-disabled td {
+    background: #f5f5f5;
+}
+
+/* Hover highlight */
+.qa-matrix-row:not(.qa-row-disabled):hover td {
+    background: #f0f7fc;
+}
+
+/* ---- Dark Mode ---- */
+.dark-mode .qa-matrix-table thead th {
+    background: #21262d;
+    border-color: #30363d;
+    color: #8b949e;
+}
+
+.dark-mode .qa-matrix-table tbody td {
+    border-color: #21262d;
+}
+
+.dark-mode .qa-cell-dept {
+    color: #c9d1d9;
+}
+
+.dark-mode .qa-row-disabled td {
+    background: #161b22;
+}
+
+.dark-mode .qa-row-disabled .qa-cell-dept {
+    color: #484f58;
+}
+
+.dark-mode .qa-matrix-row:nth-child(even) td {
+    background: #0d1117;
+}
+
+.dark-mode .qa-matrix-row:not(.qa-row-disabled):hover td {
+    background: #161b22;
+}
+
+.dark-mode .qa-cell-select select {
+    background: #0d1117;
+    border-color: #30363d;
+    color: #c9d1d9;
+}
+
+.dark-mode .qa-cell-select select:focus {
+    border-color: #58a6ff;
+    box-shadow: 0 0 0 2px rgba(88, 166, 255, 0.15);
+}
+
+/* ---- Responsive ---- */
+@media screen and (max-width: 900px) {
+    .qa-matrix-table {
+        font-size: 12px;
+    }
+
+    .qa-matrix-table thead th {
+        padding: 6px;
+        font-size: 11px;
+    }
+
+    .qa-matrix-table tbody td {
+        padding: 4px 6px;
+    }
+
+    .qa-cell-select select {
+        min-width: 120px !important;
+        font-size: 11px;
+    }
+}
