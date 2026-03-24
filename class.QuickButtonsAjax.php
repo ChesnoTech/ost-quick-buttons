@@ -447,6 +447,163 @@ class QuickButtonsAjax extends AjaxController {
     }
 
     // ================================================================
+    //  Dashboard / Reports
+    // ================================================================
+
+    /**
+     * GET /quick-buttons/dashboard
+     *
+     * Returns workflow metrics: throughput, avg time per step, agent stats.
+     * Query params: days (default 7)
+     */
+    function dashboard() {
+        $this->requireStaff();
+
+        $days = max(1, min(90, (int) ($_GET['days'] ?? 7)));
+        $since = date('Y-m-d H:i:s', strtotime("-{$days} days"));
+
+        // Get all Quick Buttons widget statuses for filtering
+        $plugin = self::findPlugin();
+        $statusIds = array();
+        if ($plugin) {
+            foreach ($plugin->getActiveInstances() as $instance) {
+                $config = $instance->getConfig();
+                if (!$config) continue;
+                $data = self::parseWidgetConfig($config);
+                foreach (($data['departments'] ?? array()) as $deptCfg) {
+                    if (empty($deptCfg['enabled'])) continue;
+                    foreach (array('start_trigger_status','start_target_status','stop_target_status') as $f)
+                        if (!empty($deptCfg[$f])) $statusIds[$deptCfg[$f]] = true;
+                }
+            }
+        }
+
+        // 1. Tickets processed per day (status change events)
+        $dailyRes = db_query(
+            "SELECT DATE(e.timestamp) as day, COUNT(*) as cnt
+             FROM ost_thread_event e
+             JOIN ost_thread t ON e.thread_id = t.id AND t.object_type = 'T'
+             WHERE e.event_id = 9 AND e.timestamp >= '{$since}'
+               AND e.data LIKE '%\"status\"%'
+             GROUP BY DATE(e.timestamp)
+             ORDER BY day");
+        $daily = array();
+        if ($dailyRes)
+            while ($row = db_fetch_array($dailyRes))
+                $daily[] = array('day' => $row['day'], 'count' => (int) $row['cnt']);
+
+        // 2. Average time per step (time between consecutive status changes per ticket)
+        $stepTimesRes = db_query(
+            "SELECT t.object_id as ticket_id, e.data, e.timestamp
+             FROM ost_thread_event e
+             JOIN ost_thread t ON e.thread_id = t.id AND t.object_type = 'T'
+             WHERE e.event_id = 9 AND e.timestamp >= '{$since}'
+               AND e.data LIKE '%\"status\"%'
+             ORDER BY t.object_id, e.timestamp");
+        $stepDurations = array();
+        $prevByTicket = array();
+        if ($stepTimesRes) {
+            while ($row = db_fetch_array($stepTimesRes)) {
+                $tid = $row['ticket_id'];
+                $eventData = @json_decode($row['data'], true);
+                $statusId = $eventData['status'] ?? null;
+                if (!$statusId) continue;
+
+                if (isset($prevByTicket[$tid])) {
+                    $prev = $prevByTicket[$tid];
+                    $duration = strtotime($row['timestamp']) - strtotime($prev['time']);
+                    $key = $prev['status'];
+                    if (!isset($stepDurations[$key]))
+                        $stepDurations[$key] = array('total' => 0, 'count' => 0);
+                    $stepDurations[$key]['total'] += $duration;
+                    $stepDurations[$key]['count']++;
+                }
+                $prevByTicket[$tid] = array('status' => (string) $statusId, 'time' => $row['timestamp']);
+            }
+        }
+
+        // Build avg times with status names
+        $avgTimes = array();
+        foreach ($stepDurations as $statusId => $data) {
+            $status = TicketStatus::lookup($statusId);
+            $avgSec = $data['count'] > 0 ? round($data['total'] / $data['count']) : 0;
+            $avgTimes[] = array(
+                'statusId'   => $statusId,
+                'statusName' => $status ? $status->getName() : __('Unknown'),
+                'avgSeconds' => $avgSec,
+                'avgDisplay' => self::formatDuration($avgSec),
+                'count'      => $data['count'],
+            );
+        }
+
+        // 3. Agent leaderboard (claims in period)
+        $agentRes = db_query(
+            "SELECT e.staff_id, s.firstname, s.lastname, COUNT(*) as cnt
+             FROM ost_thread_event e
+             JOIN ost_thread t ON e.thread_id = t.id AND t.object_type = 'T'
+             LEFT JOIN ost_staff s ON e.staff_id = s.staff_id
+             WHERE e.event_id = 4 AND e.timestamp >= '{$since}'
+             GROUP BY e.staff_id
+             ORDER BY cnt DESC
+             LIMIT 20");
+        $agents = array();
+        if ($agentRes)
+            while ($row = db_fetch_array($agentRes))
+                $agents[] = array(
+                    'name'  => trim($row['firstname'] . ' ' . $row['lastname']) ?: __('Unknown'),
+                    'count' => (int) $row['cnt'],
+                );
+
+        // 4. Current queue snapshot
+        $queueRes = db_query(
+            "SELECT s.id, s.name, COUNT(*) as cnt
+             FROM ost_ticket t
+             JOIN ost_ticket_status s ON t.status_id = s.id
+             WHERE s.state = 'open'
+             GROUP BY s.id
+             ORDER BY s.sort");
+        $queue = array();
+        if ($queueRes)
+            while ($row = db_fetch_array($queueRes))
+                $queue[] = array(
+                    'statusId'   => (string) $row['id'],
+                    'statusName' => $row['name'],
+                    'count'      => (int) $row['cnt'],
+                );
+
+        return $this->json_encode(array(
+            'days'     => $days,
+            'daily'    => $daily,
+            'avgTimes' => $avgTimes,
+            'agents'   => $agents,
+            'queue'    => $queue,
+            'i18n'     => array(
+                'dashboard'     => __('Workflow Dashboard'),
+                'ticketsPerDay' => __('Tickets Processed Per Day'),
+                'avgTimePerStep'=> __('Average Time Per Step'),
+                'agentLeader'   => __('Agent Leaderboard'),
+                'currentQueue'  => __('Current Queue'),
+                'status'        => __('Status'),
+                'avgTime'       => __('Avg Time'),
+                'transitions'   => __('Transitions'),
+                'agent'         => __('Agent'),
+                'claimed'       => __('Claimed'),
+                'tickets'       => __('Tickets'),
+                'last7days'     => __('Last 7 Days'),
+                'last30days'    => __('Last 30 Days'),
+                'last90days'    => __('Last 90 Days'),
+            ),
+        ));
+    }
+
+    private static function formatDuration($totalSec) {
+        if ($totalSec < 60) return $totalSec . 's';
+        if ($totalSec < 3600) return round($totalSec / 60) . 'm';
+        if ($totalSec < 86400) return round($totalSec / 3600, 1) . 'h';
+        return round($totalSec / 86400, 1) . 'd';
+    }
+
+    // ================================================================
     //  Action Sequences (with error recovery)
     // ================================================================
 
