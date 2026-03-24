@@ -1,5 +1,19 @@
 # Changelog
 
+## [2.3.0] - 2026-03-24
+
+### Added
+- **Live timer** — shows elapsed time since ticket entered current status (on Stop buttons)
+- **Undo button** — floating undo bar with 60-second countdown after any action
+- **Bulk action toolbar** — Start Selected / Complete Selected buttons appear when tickets are checked
+- **First instance bootstrap fix** — static bootstrap ensures assets load even with 0 active instances
+- **Server timestamp sync** — timer uses server time offset to avoid client clock drift
+
+### Changed
+- Ticket metadata now includes `lastupdate` and `serverNow` for timer calculation
+- Execute response includes `canUndo` flag for undo bar display
+- Undo stores pre-action state (status, staff, team, dept) in session with 60s expiry
+
 ## [2.2.0] - 2026-03-24
 
 ### Added
