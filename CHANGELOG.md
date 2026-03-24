@@ -1,5 +1,20 @@
 # Changelog
 
+## [2.4.0] - 2026-03-24
+
+### Added
+- **Workflow Dashboard** — admin page with 4 metric cards:
+  - Tickets processed per day (bar chart)
+  - Average time per step (table with duration)
+  - Agent leaderboard (ranked by claims)
+  - Current queue snapshot (tickets by open status)
+- Dashboard supports 7-day, 30-day, 90-day time ranges
+- Dark mode support for dashboard
+- **Automated test suite** — 53 self-contained tests (no osTicket bootstrap required):
+  - choiceKey extraction, JSON parsing, config validation
+  - Duration formatting, button resolution logic, undo state
+- Dashboard and testing sections in README
+
 ## [2.3.0] - 2026-03-24
 
 ### Added
