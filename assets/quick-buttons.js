@@ -13,6 +13,7 @@
     var QA = {
         widgets: null,
         tickets: null,
+        i18n: { start: 'Start', done: 'Done', error: 'Error' },
 
         // Fixed button definitions
         START_ICON: 'icon-play',
@@ -49,6 +50,7 @@
                 success: function(data) {
                     QA.widgets = data.widgets || [];
                     QA.tickets = data.tickets || {};
+                    if (data.i18n) QA.i18n = data.i18n;
                     if (QA.widgets.length) {
                         QA.renderButtons();
                     }
@@ -125,7 +127,7 @@
 
                 var icon = resolved.action === 'start' ? QA.START_ICON : QA.STOP_ICON;
                 var color = resolved.action === 'start' ? QA.START_COLOR : QA.STOP_COLOR;
-                var label = resolved.action === 'start' ? 'Start' : 'Done';
+                var label = resolved.action === 'start' ? QA.i18n.start : QA.i18n.done;
 
                 var $link = $('<a href="#"></a>')
                     .addClass('qa-inline-btn')
@@ -220,7 +222,7 @@
                     } catch (ex) {
                         msg = xhr.responseText || 'Unknown error';
                     }
-                    $.sysAlert(__('Error'), msg);
+                    $.sysAlert(QA.i18n.error, msg);
                     $btn.removeClass('qa-loading');
                     $btn.html(originalHtml);
                 }
