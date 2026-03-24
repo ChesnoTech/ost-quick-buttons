@@ -51,20 +51,20 @@
             dataType: 'json',
             cache: false,
             success: function(data) {
-                buildMatrix($textarea, $formRow, data.departments, data.statuses);
+                var strings = data.i18n || {};
+                buildMatrix($textarea, $formRow, data.departments, data.statuses, strings);
             },
             error: function() {
-                // Show a message if AJAX fails
                 $formRow.after(
                     '<tr><td colspan="2" style="color:red;padding:10px;">' +
-                    'Failed to load departments/statuses. Save the instance first, then reload.' +
+                    'Failed to load configuration data. Save the instance first, then reload.' +
                     '</td></tr>'
                 );
             }
         });
     }
 
-    function buildMatrix($textarea, $formRow, departments, statuses) {
+    function buildMatrix($textarea, $formRow, departments, statuses, i18n) {
         // Parse existing config from textarea
         var existing = {};
         try {
@@ -74,15 +74,17 @@
             existing = {};
         }
 
+        var selectLabel = i18n.select || '-- Select --';
+
         // Build status options HTML
-        var statusOptions = '<option value="">-- Select --</option>';
+        var statusOptions = '<option value="">' + escapeHtml(selectLabel) + '</option>';
         $.each(statuses, function(i, s) {
             statusOptions += '<option value="' + s.id + '">' +
                 escapeHtml(s.name) + ' (' + escapeHtml(s.state) + ')</option>';
         });
 
         // Build department options HTML (for transfer dropdown)
-        var deptOptions = '<option value="">-- Select --</option>';
+        var deptOptions = '<option value="">' + escapeHtml(selectLabel) + '</option>';
         $.each(departments, function(i, d) {
             deptOptions += '<option value="' + d.id + '">' +
                 escapeHtml(d.name) + '</option>';
@@ -94,12 +96,12 @@
         var $table = $(
             '<table class="qa-matrix-table">' +
             '<thead><tr>' +
-            '<th class="qa-col-dept">Department</th>' +
-            '<th class="qa-col-enabled">Enabled</th>' +
-            '<th class="qa-col-status">Start: Trigger Status</th>' +
-            '<th class="qa-col-status">Start: Target Status</th>' +
-            '<th class="qa-col-status">Stop: Target Status</th>' +
-            '<th class="qa-col-dept-sel">Stop: Transfer To</th>' +
+            '<th class="qa-col-dept">' + escapeHtml(i18n.department || 'Department') + '</th>' +
+            '<th class="qa-col-enabled">' + escapeHtml(i18n.enabled || 'Enabled') + '</th>' +
+            '<th class="qa-col-status">' + escapeHtml(i18n.start_trigger || 'Start: Trigger Status') + '</th>' +
+            '<th class="qa-col-status">' + escapeHtml(i18n.start_target || 'Start: Target Status') + '</th>' +
+            '<th class="qa-col-status">' + escapeHtml(i18n.stop_target || 'Stop: Target Status') + '</th>' +
+            '<th class="qa-col-dept-sel">' + escapeHtml(i18n.stop_transfer || 'Stop: Transfer To') + '</th>' +
             '</tr></thead>' +
             '<tbody></tbody>' +
             '</table>'

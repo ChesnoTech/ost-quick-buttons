@@ -1,5 +1,14 @@
 # Changelog
 
+## [2.1.0] - 2026-03-24
+
+### Added
+- Multilanguage (i18n) support for all UI strings
+- PHP `__()` translation function used for all user-facing text
+- Translated strings passed from PHP to JavaScript via API responses
+- Admin matrix headers, dropdown labels, and error messages are now translatable
+- Frontend button tooltips ("Start", "Done") are now translatable
+
 ## [2.0.0] - 2026-03-24
 
 ### Added
