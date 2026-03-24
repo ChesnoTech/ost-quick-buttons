@@ -2,11 +2,8 @@
 /**
  * Quick Buttons Plugin - AJAX Controller
  *
- * Handles all API endpoints: widget data, action execution,
- * admin config data, and static asset serving.
- *
  * @author  ChesnoTech
- * @version 2.1.0
+ * @version 2.2.0
  * @link    https://github.com/ChesnoTech/ost-quick-buttons
  */
 
@@ -19,15 +16,8 @@ require_once INCLUDE_DIR . 'class.plugin.php';
 
 class QuickButtonsAjax extends AjaxController {
 
-    /**
-     * Extract the key (ID) from a ChoiceField config value.
-     *
-     * ChoiceField stores values as JSON: {"9":"Platform Build (Open)"}
-     * This returns just the key (e.g. "9").
-     */
     private static function choiceKey($value) {
-        if (!$value)
-            return $value;
+        if (!$value) return $value;
         if (is_scalar($value)) {
             $decoded = @json_decode($value, true);
             if (is_array($decoded) && count($decoded) === 1)
@@ -39,27 +29,17 @@ class QuickButtonsAjax extends AjaxController {
         return (string) $value;
     }
 
-    /**
-     * Parse widget_config JSON from a plugin instance config.
-     * Strips any HTML tags left by Redactor WYSIWYG.
-     */
     private static function parseWidgetConfig($config) {
         $raw = strip_tags($config->get('widget_config') ?: '');
         $data = @json_decode($raw, true);
         return is_array($data) ? $data : array();
     }
 
-    /**
-     * Find the Quick Buttons plugin record by install path.
-     */
     private static function findPlugin() {
         return Plugin::objects()->findFirst(
             array('install_path' => 'plugins/quick-buttons'));
     }
 
-    /**
-     * Require authenticated staff. Returns the staff object or sends 403.
-     */
     private function requireStaff() {
         global $thisstaff;
         if (!$thisstaff || !$thisstaff->isValid())
@@ -68,15 +48,9 @@ class QuickButtonsAjax extends AjaxController {
     }
 
     // ================================================================
-    //  API Endpoints
+    //  API: Admin Config Data
     // ================================================================
 
-    /**
-     * GET /quick-buttons/admin-config-data
-     *
-     * Returns departments, statuses, and i18n strings for the admin
-     * config matrix UI.
-     */
     function getAdminConfigData() {
         $this->requireStaff();
 
@@ -106,19 +80,16 @@ class QuickButtonsAjax extends AjaxController {
                 'start_target'  => __('Start: Target Status'),
                 'stop_target'   => __('Stop: Target Status'),
                 'stop_transfer' => __('Stop: Transfer To'),
+                'clear_team'    => __('Clear Team'),
                 'select'        => __('-- Select --'),
             ),
         ));
     }
 
-    /**
-     * POST /quick-buttons/widgets
-     *
-     * Returns widget configs visible to the current agent,
-     * plus ticket metadata (topic, dept, status) for client-side filtering.
-     *
-     * POST param: tids[] — ticket IDs to fetch metadata for.
-     */
+    // ================================================================
+    //  API: Get Widgets (with permissions)
+    // ================================================================
+
     function getWidgets() {
         $thisstaff = $this->requireStaff();
 
@@ -126,48 +97,59 @@ class QuickButtonsAjax extends AjaxController {
         $widgets = array();
 
         $plugin = self::findPlugin();
+        $emptyResponse = array(
+            'widgets' => array(),
+            'tickets' => new \stdClass(),
+            'i18n'    => $this->getI18nStrings(),
+            'perms'   => $this->getAgentPerms($thisstaff),
+        );
+
         if (!$plugin)
-            return $this->json_encode(array(
-                'widgets' => $widgets,
-                'tickets' => new \stdClass(),
-                'i18n'    => array('start' => __('Start'), 'done' => __('Done'), 'error' => __('Error'))));
+            return $this->json_encode($emptyResponse);
 
         foreach ($plugin->getActiveInstances() as $instance) {
             $config = $instance->getConfig();
-            if (!$config)
-                continue;
+            if (!$config) continue;
 
             $topicId = self::choiceKey($config->get('topic_id'));
-            if (!$topicId)
-                continue;
+            if (!$topicId) continue;
 
             $data = self::parseWidgetConfig($config);
-            if (empty($data['departments']))
-                continue;
+            if (empty($data['departments'])) continue;
 
             $deptConfigs = array();
             foreach ($data['departments'] as $deptId => $deptCfg) {
                 $deptId = (string) $deptId;
-                if (empty($deptCfg['enabled']))
-                    continue;
-                if (!in_array($deptId, $agentDepts))
-                    continue;
+                if (empty($deptCfg['enabled'])) continue;
+                if (!in_array($deptId, $agentDepts)) continue;
 
                 $deptConfigs[$deptId] = array(
                     'start_trigger' => (string) ($deptCfg['start_trigger_status'] ?? ''),
                     'start_target'  => (string) ($deptCfg['start_target_status'] ?? ''),
                     'stop_target'   => (string) ($deptCfg['stop_target_status'] ?? ''),
                     'stop_transfer' => (string) ($deptCfg['stop_transfer_dept'] ?? ''),
+                    'clear_team'    => !empty($deptCfg['clear_team']),
                 );
             }
 
-            if (empty($deptConfigs))
-                continue;
+            if (empty($deptConfigs)) continue;
+
+            // Custom labels and colors
+            $startLabel = $config->get('start_label') ?: '';
+            $stopLabel  = $config->get('stop_label') ?: '';
+            $startColor = $config->get('start_color') ?: '';
+            $stopColor  = $config->get('stop_color') ?: '';
+            $confirm    = (bool) $config->get('confirm_actions');
 
             $widgets[] = array(
-                'id'    => $instance->getId(),
-                'topic' => $topicId,
-                'depts' => $deptConfigs,
+                'id'          => $instance->getId(),
+                'topic'       => $topicId,
+                'depts'       => $deptConfigs,
+                'startLabel'  => $startLabel,
+                'stopLabel'   => $stopLabel,
+                'startColor'  => $startColor,
+                'stopColor'   => $stopColor,
+                'confirm'     => $confirm,
             );
         }
 
@@ -179,7 +161,7 @@ class QuickButtonsAjax extends AjaxController {
             if ($ids) {
                 $in = implode(',', $ids);
                 $res = db_query(
-                    "SELECT ticket_id, topic_id, dept_id, status_id FROM "
+                    "SELECT ticket_id, topic_id, dept_id, status_id, staff_id FROM "
                     . TICKET_TABLE . " WHERE ticket_id IN ($in)");
                 if ($res) {
                     $map = array();
@@ -189,6 +171,7 @@ class QuickButtonsAjax extends AjaxController {
                             'topic'  => $row['topic_id'] ? (string) $row['topic_id'] : null,
                             'dept'   => $row['dept_id'] ? (string) $row['dept_id'] : null,
                             'status' => $row['status_id'] ? (string) $row['status_id'] : null,
+                            'staff'  => $row['staff_id'] ? (string) $row['staff_id'] : null,
                         );
                     }
                     $tickets = (object) $map;
@@ -199,25 +182,36 @@ class QuickButtonsAjax extends AjaxController {
         return $this->json_encode(array(
             'widgets' => $widgets,
             'tickets' => $tickets,
-            'i18n'    => array(
-                'start' => __('Start'),
-                'done'  => __('Done'),
-                'error' => __('Error'),
-            ),
+            'i18n'    => $this->getI18nStrings(),
+            'perms'   => $this->getAgentPerms($thisstaff),
         ));
     }
 
-    /**
-     * POST /quick-buttons/execute
-     *
-     * Execute Start or Stop action on selected tickets.
-     *
-     * POST params:
-     *   widget_id  - Plugin instance ID
-     *   action     - "start" or "stop"
-     *   dept_id    - Department ID for config lookup
-     *   tids[]     - Ticket IDs
-     */
+    private function getI18nStrings() {
+        return array(
+            'start'        => __('Start'),
+            'done'         => __('Done'),
+            'error'        => __('Error'),
+            'confirm'      => __('Confirm'),
+            'cancel'       => __('Cancel'),
+            'confirmStart' => __('Start working on ticket #%s?'),
+            'confirmStop'  => __('Complete and hand off ticket #%s?'),
+        );
+    }
+
+    private function getAgentPerms($thisstaff) {
+        return array(
+            'canAssign'   => $thisstaff->hasPerm(Ticket::PERM_ASSIGN, false),
+            'canTransfer' => $thisstaff->hasPerm(Ticket::PERM_TRANSFER, false),
+            'canRelease'  => $thisstaff->hasPerm(Ticket::PERM_RELEASE, false),
+            'canManage'   => $thisstaff->canManageTickets(),
+        );
+    }
+
+    // ================================================================
+    //  API: Execute Action
+    // ================================================================
+
     function execute() {
         $thisstaff = $this->requireStaff();
 
@@ -229,11 +223,9 @@ class QuickButtonsAjax extends AjaxController {
         if (!$widgetId)
             Http::response(400, $this->json_encode(
                 array('error' => __('Invalid widget'))));
-
         if (!in_array($action, array('start', 'stop')))
             Http::response(400, $this->json_encode(
                 array('error' => __('Invalid action type'))));
-
         if (!$tids || !is_array($tids) || !count($tids))
             Http::response(400, $this->json_encode(
                 array('error' => __('No tickets selected'))));
@@ -254,7 +246,6 @@ class QuickButtonsAjax extends AjaxController {
             Http::response(500, $this->json_encode(
                 array('error' => __('Configuration error'))));
 
-        // Validate department config
         $data = self::parseWidgetConfig($config);
         if (empty($data['departments'][$deptId]))
             Http::response(400, $this->json_encode(
@@ -265,13 +256,12 @@ class QuickButtonsAjax extends AjaxController {
             Http::response(400, $this->json_encode(
                 array('error' => __('Department not enabled in this widget'))));
 
-        // Validate agent access
         $agentDepts = array_map('strval', $thisstaff->getDepts());
         if (!in_array($deptId, $agentDepts))
             Http::response(403, $this->json_encode(
                 array('error' => __('Access Denied'))));
 
-        // Resolve target status
+        // Resolve targets
         $targetStatusId = ($action === 'start')
             ? ($deptCfg['start_target_status'] ?? null)
             : ($deptCfg['stop_target_status'] ?? null);
@@ -284,7 +274,6 @@ class QuickButtonsAjax extends AjaxController {
                     array('error' => __('Configured target status not found'))));
         }
 
-        // Resolve transfer department (stop only)
         $transferDept = null;
         if ($action === 'stop' && !empty($deptCfg['stop_transfer_dept'])) {
             $transferDept = Dept::lookup($deptCfg['stop_transfer_dept']);
@@ -292,6 +281,8 @@ class QuickButtonsAjax extends AjaxController {
                 Http::response(400, $this->json_encode(
                     array('error' => __('Configured transfer department not found'))));
         }
+
+        $clearTeam = ($action === 'stop' && !empty($deptCfg['clear_team']));
 
         // Process tickets
         $success = 0;
@@ -310,16 +301,15 @@ class QuickButtonsAjax extends AjaxController {
             }
 
             $ticketNum = $ticket->getNumber();
-            $ticketFailed = false;
 
             if ($action === 'start') {
-                $ticketFailed = !$this->doStart($ticket, $thisstaff, $targetStatus, $ticketNum, $errors_list);
+                $ok = $this->doStart($ticket, $thisstaff, $targetStatus, $ticketNum, $errors_list);
             } else {
-                $ticketFailed = !$this->doStop($ticket, $thisstaff, $targetStatus, $transferDept, $ticketNum, $errors_list);
+                $ok = $this->doStop($ticket, $thisstaff, $targetStatus, $transferDept, $clearTeam, $ticketNum, $errors_list);
             }
 
-            if ($ticketFailed) $failed++;
-            else $success++;
+            if ($ok) $success++;
+            else $failed++;
         }
 
         // Response
@@ -349,24 +339,29 @@ class QuickButtonsAjax extends AjaxController {
     }
 
     // ================================================================
-    //  Action Sequences
+    //  Action Sequences (with error recovery)
     // ================================================================
 
-    /**
-     * Execute Start sequence: Claim + Change Status.
-     * Returns true on success, false on failure.
-     */
     private function doStart($ticket, $thisstaff, $targetStatus, $ticketNum, &$errors_list) {
+        // Save original state for rollback
+        $origStaffId = $ticket->getStaffId();
+
+        // 1. Claim
         $result = $this->actionClaim($ticket, $thisstaff);
         if ($result !== true) {
             $errors_list[] = sprintf(__('Ticket #%s: Claim failed — %s'), $ticketNum, $result);
             return false;
         }
 
+        // 2. Change status
         if ($targetStatus) {
             $result = $this->actionChangeStatus($ticket, $targetStatus, $thisstaff);
             if ($result !== true) {
-                $errors_list[] = sprintf(__('Ticket #%s: Status change failed — %s'), $ticketNum, $result);
+                // Rollback: release the claim we just made
+                $ticket->release(array('sid' => true), $rollbackErrors = array());
+                if ($origStaffId)
+                    $ticket->setStaffId($origStaffId);
+                $errors_list[] = sprintf(__('Ticket #%s: Status change failed (claim rolled back) — %s'), $ticketNum, $result);
                 return false;
             }
         }
@@ -374,11 +369,8 @@ class QuickButtonsAjax extends AjaxController {
         return true;
     }
 
-    /**
-     * Execute Stop sequence: Change Status + Release Agent + Transfer.
-     * Returns true on success, false on failure.
-     */
-    private function doStop($ticket, $thisstaff, $targetStatus, $transferDept, $ticketNum, &$errors_list) {
+    private function doStop($ticket, $thisstaff, $targetStatus, $transferDept, $clearTeam, $ticketNum, &$errors_list) {
+        // 1. Change status
         if ($targetStatus) {
             $result = $this->actionChangeStatus($ticket, $targetStatus, $thisstaff);
             if ($result !== true) {
@@ -387,12 +379,18 @@ class QuickButtonsAjax extends AjaxController {
             }
         }
 
+        // 2. Release agent (and optionally team)
         if ($ticket->getStaffId()) {
-            $result = $this->actionReleaseStaff($ticket, $thisstaff);
+            if ($clearTeam) {
+                $result = $this->actionReleaseAll($ticket, $thisstaff);
+            } else {
+                $result = $this->actionReleaseStaff($ticket, $thisstaff);
+            }
             if ($result !== true)
-                $errors_list[] = sprintf(__('Ticket #%s: Agent release warning — %s'), $ticketNum, $result);
+                $errors_list[] = sprintf(__('Ticket #%s: Release warning — %s'), $ticketNum, $result);
         }
 
+        // 3. Transfer
         if ($transferDept) {
             $result = $this->actionTransfer($ticket, $transferDept, $thisstaff);
             if ($result !== true) {
@@ -467,6 +465,24 @@ class QuickButtonsAjax extends AjaxController {
         return true;
     }
 
+    private function actionReleaseAll($ticket, $thisstaff) {
+        if (!$ticket->checkStaffPerm($thisstaff, Ticket::PERM_RELEASE))
+            return __('Permission denied');
+        if (!$ticket->isOpen())
+            return __('Ticket is not open');
+
+        $info = array();
+        if ($ticket->getStaffId()) $info['sid'] = true;
+        if ($ticket->getTeamId()) $info['tid'] = true;
+        if (empty($info))
+            return true;
+
+        $errors = array();
+        if (!$ticket->release($info, $errors))
+            return $errors['err'] ?: __('Unable to release assignment');
+        return true;
+    }
+
     // ================================================================
     //  Static Asset Serving
     // ================================================================
@@ -489,30 +505,24 @@ class QuickButtonsAjax extends AjaxController {
     }
 
     function serveJs() {
-        $this->serveFile(
-            dirname(__FILE__) . '/assets/quick-buttons.js',
+        $this->serveFile(dirname(__FILE__) . '/assets/quick-buttons.js',
             'application/javascript; charset=UTF-8');
     }
 
     function serveCss() {
         $isOSTA = is_dir(rtrim(ROOT_DIR, '/') . '/osta');
         $cssFile = $isOSTA ? 'quick-buttons.css' : 'quick-buttons-default.css';
-        $this->serveFile(
-            dirname(__FILE__) . '/assets/' . $cssFile,
+        $this->serveFile(dirname(__FILE__) . '/assets/' . $cssFile,
             'text/css; charset=UTF-8');
     }
 
     function serveAdminJs() {
-        $this->serveFile(
-            dirname(__FILE__) . '/assets/quick-buttons-admin.js',
-            'application/javascript; charset=UTF-8',
-            3600);
+        $this->serveFile(dirname(__FILE__) . '/assets/quick-buttons-admin.js',
+            'application/javascript; charset=UTF-8', 3600);
     }
 
     function serveAdminCss() {
-        $this->serveFile(
-            dirname(__FILE__) . '/assets/quick-buttons-admin.css',
-            'text/css; charset=UTF-8',
-            3600);
+        $this->serveFile(dirname(__FILE__) . '/assets/quick-buttons-admin.css',
+            'text/css; charset=UTF-8', 3600);
     }
 }
