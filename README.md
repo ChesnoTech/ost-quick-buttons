@@ -178,6 +178,24 @@ quick-buttons/
 
 Theme detection is automatic — the plugin checks for the `osta/` directory at runtime and serves the appropriate CSS.
 
+## Support Policy
+
+This plugin is provided **as-is**, free and open source, with **no guaranteed support**.
+
+- Bug reports: Open a [GitHub Issue](https://github.com/ChesnoTech/ost-quick-buttons/issues) with steps to reproduce
+- Feature requests: Open a GitHub Issue — no promises on timeline
+- Pull requests: Welcome, but review may take time
+- **No email support, no SLA, no paid support plans**
+- For professional setup or custom workflows: contact via GitHub Issues
+
+Use at your own risk. **Always test in a staging environment before deploying to production.** Back up your database before installing or upgrading.
+
+## Disclaimer
+
+THIS SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND. The author is not responsible for any data loss, downtime, or damage caused by the use of this plugin. It is your responsibility to test the plugin in your environment before production deployment.
+
+This plugin modifies ticket status, assignment, and department via osTicket's built-in API. It does **not** directly modify the database, but actions performed (claim, transfer, status change) are permanent and trigger osTicket's native notification and logging systems.
+
 ## License
 
 MIT License. See [LICENSE](LICENSE) for details.
