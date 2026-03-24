@@ -1,0 +1,208 @@
+/**
+ * Quick Buttons Plugin - Styles v2.0 (Default osTicket Theme)
+ *
+ * Inline per-ticket workflow buttons on both desktop and mobile.
+ * Desktop: sticky <td> column on the right side of each row.
+ * Mobile: left-side vertical column on each card.
+ *
+ * This stylesheet is for the standard osTicket theme (Font Awesome icons).
+ * For osTicketAwesome (SVG icons), see quick-buttons.css.
+ */
+
+/* ======================================================
+   DESKTOP: Sticky column with inline buttons
+   ====================================================== */
+
+td.qa-actions-cell {
+    position: sticky;
+    right: 0;
+    z-index: 15;
+    padding: 0 6px !important;
+    background: inherit;
+    border-left: none !important;
+    white-space: nowrap;
+    vertical-align: middle;
+}
+
+th.qa-actions-header {
+    position: sticky;
+    right: 0;
+    z-index: 16;
+    width: 1px;
+    padding: 0 !important;
+    background: inherit;
+}
+
+.qa-row-actions {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+/* Each inline button */
+.qa-inline-btn {
+    width: 28px;
+    height: 28px;
+    border-radius: 5px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff !important;
+    font-size: 14px;
+    text-decoration: none !important;
+    background: #128DBE;
+    transition: opacity 0.15s ease, transform 0.1s ease;
+    cursor: pointer;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+    flex-shrink: 0;
+}
+
+.qa-inline-btn:hover {
+    opacity: 0.85;
+    transform: scale(1.1);
+    color: #fff !important;
+    text-decoration: none !important;
+}
+
+.qa-inline-btn:active {
+    opacity: 0.7;
+    transform: scale(0.95);
+}
+
+.qa-inline-btn.qa-loading {
+    opacity: 0.5;
+    pointer-events: none;
+}
+
+/* Regular icon — Font Awesome font icons, just center them */
+.qa-inline-btn > i {
+    color: #fff;
+    line-height: 1;
+    text-align: center;
+    vertical-align: middle;
+}
+
+/* Stacked icon container */
+.qa-inline-btn .qa-icon-stack {
+    display: inline-block;
+    position: relative;
+    width: 1.4em;
+    height: 1.2em;
+    line-height: 1.2em;
+}
+
+.qa-inline-btn .qa-icon-stack .icon-stack-base {
+    font-size: 1em;
+    position: absolute;
+    left: 0;
+    top: 0;
+    color: #fff;
+}
+
+.qa-inline-btn .qa-icon-stack .icon-light {
+    font-size: 0.65em;
+    position: absolute;
+    right: -3px;
+    bottom: -1px;
+    color: #fff;
+}
+
+/* Spinner animation */
+@keyframes qa-spin {
+    0%   { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.icon-spin {
+    animation: qa-spin 1s linear infinite;
+    display: inline-block;
+}
+
+/* ======================================================
+   DARK MODE
+   ====================================================== */
+
+.dark-mode .qa-inline-btn {
+    box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+}
+
+.dark-mode td.qa-actions-cell {
+    background: inherit;
+}
+
+/* ======================================================
+   MOBILE: Left-side vertical column on each card
+   ====================================================== */
+
+@media screen and (max-width: 760px) {
+
+    td.qa-actions-cell,
+    th.qa-actions-header {
+        display: none !important;
+    }
+
+    .qa-row-actions {
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 10px;
+        width: 44px;
+        flex-direction: column;
+        gap: 0;
+    }
+
+    tr.has-qa-inline {
+        position: relative !important;
+        padding-left: 44px !important;
+    }
+
+    .qa-inline-btn {
+        width: 100%;
+        height: auto;
+        flex: 1;
+        border-radius: 0;
+        font-size: 18px;
+        box-shadow: none;
+        -webkit-tap-highlight-color: rgba(0,0,0,0.1);
+    }
+
+    .qa-inline-btn:hover {
+        transform: none;
+    }
+
+    .qa-inline-btn:first-child {
+        border-radius: 0 6px 0 0;
+    }
+
+    .qa-inline-btn:last-child {
+        border-radius: 0 0 6px 0;
+    }
+
+    .qa-inline-btn:only-child {
+        border-radius: 0 6px 6px 0;
+    }
+
+    .qa-inline-btn .qa-icon-stack {
+        width: 1.6em;
+        height: 1.4em;
+        line-height: 1.4em;
+    }
+
+    .dark-mode .qa-inline-btn {
+        box-shadow: none;
+    }
+}
+
+@media screen and (max-width: 480px) {
+    .qa-row-actions {
+        width: 38px;
+    }
+
+    tr.has-qa-inline {
+        padding-left: 38px !important;
+    }
+
+    .qa-inline-btn {
+        font-size: 16px;
+    }
+}

@@ -468,7 +468,10 @@ class QuickButtonsAjax extends AjaxController {
     }
 
     function serveCss() {
-        $file = dirname(__FILE__) . '/assets/quick-buttons.css';
+        // Auto-detect theme: osTicketAwesome uses SVG icons, default uses Font Awesome
+        $isOSTA = is_dir(rtrim(ROOT_DIR, '/') . '/osta');
+        $cssFile = $isOSTA ? 'quick-buttons.css' : 'quick-buttons-default.css';
+        $file = dirname(__FILE__) . '/assets/' . $cssFile;
         if (!file_exists($file))
             Http::response(404, 'Not found');
 

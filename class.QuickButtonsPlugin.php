@@ -45,7 +45,11 @@ class QuickButtonsPlugin extends Plugin {
 
         $base = ROOT_PATH . 'scp/ajax.php/quick-buttons/assets';
         $dir = dirname(__FILE__) . '/assets/';
-        $v = max(@filemtime($dir . 'quick-buttons.js'), @filemtime($dir . 'quick-buttons.css')) ?: time();
+        $v = max(
+            @filemtime($dir . 'quick-buttons.js'),
+            @filemtime($dir . 'quick-buttons.css'),
+            @filemtime($dir . 'quick-buttons-default.css')
+        ) ?: time();
 
         $css = sprintf(
             '<link rel="stylesheet" type="text/css" href="%s/css?v=%s">',
