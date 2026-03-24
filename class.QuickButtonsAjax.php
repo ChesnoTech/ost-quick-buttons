@@ -63,6 +63,16 @@ class QuickButtonsAjax extends AjaxController {
         return $this->json_encode(array(
             'departments' => $departments,
             'statuses'    => $statuses,
+            'i18n'        => array(
+                'department'        => __('Department'),
+                'enabled'           => __('Enabled'),
+                'start_trigger'     => __('Start: Trigger Status'),
+                'start_target'      => __('Start: Target Status'),
+                'stop_target'       => __('Stop: Target Status'),
+                'stop_transfer'     => __('Stop: Transfer To'),
+                'select'            => __('-- Select --'),
+                'load_error'        => __('Failed to load departments/statuses. Save the instance first, then reload.'),
+            ),
         ));
     }
 
@@ -166,6 +176,11 @@ class QuickButtonsAjax extends AjaxController {
         return $this->json_encode(array(
             'widgets' => $widgets,
             'tickets' => $tickets,
+            'i18n'    => array(
+                'start'   => __('Start'),
+                'done'    => __('Done'),
+                'error'   => __('Error'),
+            ),
         ));
     }
 
