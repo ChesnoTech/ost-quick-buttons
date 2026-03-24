@@ -1,8 +1,8 @@
 /**
- * Quick Buttons Plugin - Frontend v2.2
+ * Quick Buttons Plugin - Frontend v2.3
  *
  * @author  ChesnoTech
- * @version 2.2.0
+ * @version 2.3.0
  */
 (function($) {
     'use strict';
@@ -12,9 +12,12 @@
         tickets: null,
         i18n: { start: 'Start', done: 'Done', error: 'Error', confirm: 'Confirm',
                 cancel: 'Cancel', confirmStart: 'Start working on ticket #%s?',
-                confirmStop: 'Complete and hand off ticket #%s?' },
+                confirmStop: 'Complete and hand off ticket #%s?',
+                undo: 'Undo', bulkStart: 'Start Selected', bulkStop: 'Complete Selected',
+                elapsed: 'elapsed' },
         perms: { canAssign: true, canTransfer: true, canRelease: true, canManage: true },
-        executing: {},  // debounce map: ticketId -> true while in-flight
+        executing: {},
+        timerInterval: null,
 
         START_ICON: 'icon-play',
         START_COLOR: '#128DBE',
@@ -24,10 +27,13 @@
         init: function() {
             if (!$('form#tickets').length) return;
 
+            // Cleanup
             $('.qa-row-actions').remove();
             $('td.qa-actions-cell').remove();
             $('th.qa-actions-header').remove();
             $('tr.has-qa-inline').removeClass('has-qa-inline');
+            $('.qa-bulk-toolbar').remove();
+            if (QA.timerInterval) { clearInterval(QA.timerInterval); QA.timerInterval = null; }
 
             var tids = [];
             $('form#tickets tbody tr input.ckb').each(function() {
@@ -47,7 +53,11 @@
                     QA.tickets = data.tickets || {};
                     if (data.i18n) QA.i18n = $.extend(QA.i18n, data.i18n);
                     if (data.perms) QA.perms = data.perms;
-                    if (QA.widgets.length) QA.renderButtons();
+                    if (QA.widgets.length) {
+                        QA.renderButtons();
+                        QA.renderBulkToolbar();
+                        QA.startTimers();
+                    }
                 },
                 error: function() {}
             });
@@ -75,24 +85,22 @@
                     action = 'stop';
 
                 if (!action) continue;
-
-                // Permission-based filtering
                 if (action === 'start' && !QA.perms.canAssign) continue;
                 if (action === 'stop' && !QA.perms.canManage) continue;
 
                 return {
-                    action: action,
-                    widgetId: w.id,
-                    deptId: ticketDept,
-                    startLabel: w.startLabel,
-                    stopLabel: w.stopLabel,
-                    startColor: w.startColor,
-                    stopColor: w.stopColor,
+                    action: action, widgetId: w.id, deptId: ticketDept,
+                    startLabel: w.startLabel, stopLabel: w.stopLabel,
+                    startColor: w.startColor, stopColor: w.stopColor,
                     confirm: w.confirm
                 };
             }
             return null;
         },
+
+        // ================================================================
+        //  Render buttons
+        // ================================================================
 
         renderButtons: function() {
             var isMobile = window.matchMedia('(max-width: 760px)').matches;
@@ -131,6 +139,13 @@
                     .css('background-color', color)
                     .html(QA.renderIcon(icon));
 
+                // Live timer badge
+                var info = QA.tickets[ticketId];
+                if (info && info.updated && resolved.action === 'stop') {
+                    var $timer = $('<span class="qa-timer" data-since="' + info.updated + '" data-server="' + (info.serverNow || '') + '"></span>');
+                    $link.append($timer);
+                }
+
                 if (isMobile) {
                     var $actions = $('<div class="qa-row-actions"></div>').append($link);
                     $row.addClass('has-qa-inline').prepend($actions);
@@ -149,24 +164,184 @@
             }
 
             if (!isMobile) {
-                $('.qa-inline-btn[title]').tooltip({
-                    placement: 'left',
-                    container: 'body'
-                });
+                $('.qa-inline-btn[title]').tooltip({ placement: 'left', container: 'body' });
             }
         },
 
-        renderIcon: function(iconClass) {
-            if (!iconClass) return '';
-            if (iconClass.indexOf('+') > -1) {
-                var parts = iconClass.split('+');
-                return '<span class="icon-stack qa-icon-stack">' +
-                       '<i class="' + QA.escapeHtml(parts[0]) + ' icon-stack-base"></i>' +
-                       '<i class="' + QA.escapeHtml(parts[1]) + ' icon-light"></i>' +
-                       '</span>';
-            }
-            return '<i class="' + QA.escapeHtml(iconClass) + '"></i>';
+        // ================================================================
+        //  Live timer
+        // ================================================================
+
+        startTimers: function() {
+            QA.updateTimers();
+            QA.timerInterval = setInterval(QA.updateTimers, 1000);
         },
+
+        updateTimers: function() {
+            $('.qa-timer').each(function() {
+                var $el = $(this);
+                var since = $el.data('since');
+                var serverNow = $el.data('server');
+                if (!since) return;
+
+                // Calculate offset between server time and client time
+                var serverMs = new Date(since.replace(' ', 'T') + 'Z').getTime();
+                var nowMs = Date.now();
+                if (serverNow) {
+                    var serverNowMs = new Date(serverNow.replace(' ', 'T') + 'Z').getTime();
+                    var offset = nowMs - serverNowMs;
+                    nowMs = nowMs - offset; // adjust to server time
+                }
+
+                var diffSec = Math.max(0, Math.floor((nowMs - serverMs) / 1000));
+                $el.text(QA.formatDuration(diffSec));
+            });
+        },
+
+        formatDuration: function(totalSec) {
+            var h = Math.floor(totalSec / 3600);
+            var m = Math.floor((totalSec % 3600) / 60);
+            var s = totalSec % 60;
+            if (h > 0)
+                return h + 'h ' + (m < 10 ? '0' : '') + m + 'm';
+            if (m > 0)
+                return m + 'm ' + (s < 10 ? '0' : '') + s + 's';
+            return s + 's';
+        },
+
+        // ================================================================
+        //  Bulk toolbar
+        // ================================================================
+
+        renderBulkToolbar: function() {
+            if ($('.qa-bulk-toolbar').length) return;
+
+            var $toolbar = $('<div class="qa-bulk-toolbar" style="display:none;"></div>');
+            $toolbar.append(
+                $('<button type="button" class="qa-bulk-btn qa-bulk-start"></button>')
+                    .css('background-color', QA.START_COLOR)
+                    .html(QA.renderIcon(QA.START_ICON) + ' <span>' + QA.escapeHtml(QA.i18n.bulkStart) + '</span>')
+            );
+            $toolbar.append(
+                $('<button type="button" class="qa-bulk-btn qa-bulk-stop"></button>')
+                    .css('background-color', QA.STOP_COLOR)
+                    .html(QA.renderIcon(QA.STOP_ICON) + ' <span>' + QA.escapeHtml(QA.i18n.bulkStop) + '</span>')
+            );
+
+            // Insert after the queue toolbar
+            $('form#tickets .sticky.bar, form#tickets table.sticky-header').first().after($toolbar);
+
+            // Show/hide based on checkbox selection
+            $('form#tickets').on('change', 'input.ckb', function() {
+                var checked = $('form#tickets tbody input.ckb:checked').length;
+                $toolbar.toggle(checked > 0);
+            });
+        },
+
+        handleBulkAction: function(action) {
+            var tids = [];
+            $('form#tickets tbody tr input.ckb:checked').each(function() {
+                var tid = $(this).val();
+                if (tid) {
+                    var resolved = QA.resolveButton(tid);
+                    if (resolved && resolved.action === action)
+                        tids.push({ tid: tid, resolved: resolved });
+                }
+            });
+
+            if (!tids.length) return;
+
+            var firstResolved = tids[0].resolved;
+            var ticketIds = tids.map(function(t) { return t.tid; });
+
+            var message = (action === 'start')
+                ? QA.i18n.bulkStart + ' (' + tids.length + ')?'
+                : QA.i18n.bulkStop + ' (' + tids.length + ')?';
+
+            if (!confirm(message)) return;
+
+            $.ajax({
+                url: 'ajax.php/quick-buttons/execute',
+                type: 'POST',
+                data: {
+                    widget_id: firstResolved.widgetId,
+                    action: action,
+                    dept_id: firstResolved.deptId,
+                    tids: ticketIds
+                },
+                dataType: 'json',
+                success: function(resp) {
+                    if (resp.canUndo) QA.showUndoBar();
+                    $.pjax.reload('#pjax-container');
+                },
+                error: function(xhr) {
+                    var msg = '';
+                    try { msg = JSON.parse(xhr.responseText).error || xhr.responseText; }
+                    catch (ex) { msg = xhr.responseText || 'Unknown error'; }
+                    $.sysAlert(QA.i18n.error, msg);
+                }
+            });
+        },
+
+        // ================================================================
+        //  Undo
+        // ================================================================
+
+        showUndoBar: function() {
+            $('.qa-undo-bar').remove();
+            var $bar = $('<div class="qa-undo-bar">' +
+                '<span class="qa-undo-msg">' + QA.escapeHtml(QA.i18n.done) + '</span>' +
+                '<a href="#" class="qa-undo-link">' + QA.escapeHtml(QA.i18n.undo) + '</a>' +
+                '<span class="qa-undo-countdown">60s</span>' +
+                '</div>');
+            $('body').append($bar);
+
+            var remaining = 60;
+            var interval = setInterval(function() {
+                remaining--;
+                $bar.find('.qa-undo-countdown').text(remaining + 's');
+                if (remaining <= 0) {
+                    clearInterval(interval);
+                    $bar.fadeOut(300, function() { $bar.remove(); });
+                }
+            }, 1000);
+
+            $bar.find('.qa-undo-link').on('click', function(e) {
+                e.preventDefault();
+                clearInterval(interval);
+                $bar.remove();
+                QA.executeUndo();
+            });
+
+            // Auto-dismiss on click elsewhere
+            setTimeout(function() {
+                $(document).one('click', function() {
+                    clearInterval(interval);
+                    $bar.fadeOut(300, function() { $bar.remove(); });
+                });
+            }, 500);
+        },
+
+        executeUndo: function() {
+            $.ajax({
+                url: 'ajax.php/quick-buttons/undo',
+                type: 'POST',
+                dataType: 'json',
+                success: function() {
+                    $.pjax.reload('#pjax-container');
+                },
+                error: function(xhr) {
+                    var msg = '';
+                    try { msg = JSON.parse(xhr.responseText).error || xhr.responseText; }
+                    catch (ex) { msg = xhr.responseText || 'Unknown error'; }
+                    $.sysAlert(QA.i18n.error, msg);
+                }
+            });
+        },
+
+        // ================================================================
+        //  Click handler
+        // ================================================================
 
         handleInlineClick: function(e) {
             e.preventDefault();
@@ -182,8 +357,6 @@
             var needConfirm = $btn.data('confirm') === 1 || $btn.data('confirm') === '1';
 
             if (!widgetId || !action || !ticketId) return false;
-
-            // Debounce: prevent double execution
             if (QA.executing[ticketId]) return false;
 
             var doExecute = function() {
@@ -202,19 +375,16 @@
                         tids: [ticketId]
                     },
                     dataType: 'json',
-                    success: function() {
+                    success: function(resp) {
                         delete QA.executing[ticketId];
+                        if (resp.canUndo) QA.showUndoBar();
                         $.pjax.reload('#pjax-container');
                     },
                     error: function(xhr) {
                         delete QA.executing[ticketId];
                         var msg = '';
-                        try {
-                            var resp = JSON.parse(xhr.responseText);
-                            msg = resp.error || resp.message || xhr.responseText;
-                        } catch (ex) {
-                            msg = xhr.responseText || 'Unknown error';
-                        }
+                        try { msg = JSON.parse(xhr.responseText).error || xhr.responseText; }
+                        catch (ex) { msg = xhr.responseText || 'Unknown error'; }
                         $.sysAlert(QA.i18n.error, msg);
                         $btn.removeClass('qa-loading');
                         $btn.html(originalHtml);
@@ -223,20 +393,14 @@
             };
 
             if (needConfirm) {
-                // Find the ticket number from the row
                 var $row = $btn.closest('tr');
                 var ticketNum = $row.find('a[href*="tickets.php"]').first().text().trim() || ticketId;
                 var template = action === 'start' ? QA.i18n.confirmStart : QA.i18n.confirmStop;
                 var message = template.replace('%s', ticketNum);
 
-                // Use osTicket's built-in dialog if available, otherwise native confirm
                 if ($.dialog) {
-                    $.dialog(
-                        '<p>' + QA.escapeHtml(message) + '</p>',
-                        201,
-                        function() { doExecute(); },
-                        { size: 'small' }
-                    );
+                    $.dialog('<p>' + QA.escapeHtml(message) + '</p>', 201,
+                        function() { doExecute(); }, { size: 'small' });
                 } else if (confirm(message)) {
                     doExecute();
                 }
@@ -247,74 +411,31 @@
             return false;
         },
 
-        // Bulk action: execute on all selected tickets
-        handleBulkAction: function(action) {
-            var tids = [];
-            $('form#tickets tbody tr input.ckb:checked').each(function() {
-                var tid = $(this).val();
-                if (tid) {
-                    var resolved = QA.resolveButton(tid);
-                    if (resolved && resolved.action === action)
-                        tids.push(tid);
-                }
-            });
-
-            if (!tids.length) return;
-
-            var message = action === 'start'
-                ? QA.i18n.confirmStart.replace('#%s', ' ' + tids.length + ' tickets')
-                : QA.i18n.confirmStop.replace('#%s', ' ' + tids.length + ' tickets');
-
-            var firstResolved = QA.resolveButton(tids[0]);
-            if (!firstResolved) return;
-
-            var doExecute = function() {
-                $.ajax({
-                    url: 'ajax.php/quick-buttons/execute',
-                    type: 'POST',
-                    data: {
-                        widget_id: firstResolved.widgetId,
-                        action: action,
-                        dept_id: firstResolved.deptId,
-                        tids: tids
-                    },
-                    dataType: 'json',
-                    success: function() {
-                        $.pjax.reload('#pjax-container');
-                    },
-                    error: function(xhr) {
-                        var msg = '';
-                        try {
-                            var resp = JSON.parse(xhr.responseText);
-                            msg = resp.error || resp.message || xhr.responseText;
-                        } catch (ex) {
-                            msg = xhr.responseText || 'Unknown error';
-                        }
-                        $.sysAlert(QA.i18n.error, msg);
-                    }
-                });
-            };
-
-            if (confirm(message)) {
-                doExecute();
+        renderIcon: function(iconClass) {
+            if (!iconClass) return '';
+            if (iconClass.indexOf('+') > -1) {
+                var parts = iconClass.split('+');
+                return '<span class="icon-stack qa-icon-stack">' +
+                       '<i class="' + QA.escapeHtml(parts[0]) + ' icon-stack-base"></i>' +
+                       '<i class="' + QA.escapeHtml(parts[1]) + ' icon-light"></i>' +
+                       '</span>';
             }
+            return '<i class="' + QA.escapeHtml(iconClass) + '"></i>';
         },
 
         escapeHtml: function(str) {
             if (!str) return '';
-            return String(str)
-                .replace(/&/g, '&amp;')
-                .replace(/</g, '&lt;')
-                .replace(/>/g, '&gt;')
-                .replace(/"/g, '&quot;')
-                .replace(/'/g, '&#039;');
+            return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
         }
     };
 
     // Event bindings
     $(document).on('click.quick-buttons', '.qa-inline-btn', QA.handleInlineClick);
+    $(document).on('click.quick-buttons', '.qa-bulk-start', function() { QA.handleBulkAction('start'); });
+    $(document).on('click.quick-buttons', '.qa-bulk-stop', function() { QA.handleBulkAction('stop'); });
 
-    // Expose for bulk action integration
+    // Expose for external integration
     window.QuickButtons = {
         bulkStart: function() { QA.handleBulkAction('start'); },
         bulkStop:  function() { QA.handleBulkAction('stop'); }

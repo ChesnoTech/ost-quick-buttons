@@ -1,4 +1,10 @@
 <?php
+/**
+ * Quick Buttons Plugin - Main Class
+ *
+ * @author  ChesnoTech
+ * @version 2.3.0
+ */
 
 require_once 'config.php';
 
@@ -8,6 +14,24 @@ class QuickButtonsPlugin extends Plugin {
     static private $bootstrapped = false;
 
     function bootstrap() {
+        // bootstrap() is called per-instance. We only need one-time setup.
+        if (self::$bootstrapped)
+            return;
+        self::$bootstrapped = true;
+
+        if (!defined('STAFFINC_DIR'))
+            return;
+
+        Signal::connect('ajax.scp', array('QuickButtonsPlugin', 'registerAjaxRoutes'));
+        ob_start(array('QuickButtonsPlugin', 'injectAssets'));
+    }
+
+    /**
+     * Called when plugin is installed/active, even with 0 instances.
+     * This ensures AJAX routes and assets are available for the admin
+     * config page when creating the very first instance.
+     */
+    static function bootstrapStatic() {
         if (self::$bootstrapped)
             return;
         self::$bootstrapped = true;
@@ -26,6 +50,7 @@ class QuickButtonsPlugin extends Plugin {
                 $dir . 'class.QuickButtonsAjax.php:QuickButtonsAjax',
                 url('^widgets$', 'getWidgets'),
                 url_post('^execute$', 'execute'),
+                url_post('^undo$', 'undo'),
                 url_get('^admin-config-data$', 'getAdminConfigData'),
                 url_get('^assets/js$', 'serveJs'),
                 url_get('^assets/css$', 'serveCss'),
@@ -57,7 +82,6 @@ class QuickButtonsPlugin extends Plugin {
         $js = sprintf(
             '<script type="text/javascript" src="%s/js?v=%s"></script>',
             $base, $v);
-
         $adminCss = sprintf(
             '<link rel="stylesheet" type="text/css" href="%s/admin-css?v=%s">',
             $base, $v);
@@ -71,3 +95,9 @@ class QuickButtonsPlugin extends Plugin {
         return $buffer;
     }
 }
+
+// Static bootstrap: ensures AJAX routes + assets load even with 0 instances.
+// The plugin class file is loaded when osTicket discovers the plugin is installed,
+// so this runs on every staff page load regardless of instance count.
+if (defined('STAFFINC_DIR'))
+    QuickButtonsPlugin::bootstrapStatic();

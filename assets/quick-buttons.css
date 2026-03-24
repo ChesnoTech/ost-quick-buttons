@@ -39,10 +39,10 @@ th.qa-actions-header {
     gap: 5px;
 }
 
-/* Each inline button */
+/* Each inline button — min-height allows timer text below icon */
 .qa-inline-btn {
     width: 28px;
-    height: 28px;
+    min-height: 28px;
     border-radius: 5px;
     display: flex;
     align-items: center;
@@ -158,6 +158,88 @@ th.qa-actions-header {
     -webkit-animation: qa-spin 1s linear infinite;
     animation: qa-spin 1s linear infinite;
     display: inline-block;
+}
+
+/* ======================================================
+   LIVE TIMER BADGE
+   ====================================================== */
+
+.qa-timer {
+    display: block;
+    font-size: 9px;
+    line-height: 1;
+    margin-top: 1px;
+    opacity: 0.9;
+    font-family: monospace;
+    letter-spacing: -0.5px;
+}
+
+/* ======================================================
+   UNDO BAR
+   ====================================================== */
+
+.qa-undo-bar {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #333;
+    color: #fff;
+    padding: 10px 20px;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 14px;
+}
+
+.qa-undo-link {
+    color: #4fc3f7 !important;
+    text-decoration: underline !important;
+    cursor: pointer;
+    font-weight: 600;
+}
+
+.qa-undo-countdown {
+    opacity: 0.6;
+    font-size: 12px;
+    font-family: monospace;
+}
+
+/* ======================================================
+   BULK TOOLBAR
+   ====================================================== */
+
+.qa-bulk-toolbar {
+    padding: 8px 12px;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.qa-bulk-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    border: none;
+    border-radius: 5px;
+    color: #fff;
+    font-size: 13px;
+    cursor: pointer;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+    transition: opacity 0.15s ease;
+}
+
+.qa-bulk-btn:hover {
+    opacity: 0.85;
+}
+
+.qa-bulk-btn i,
+.qa-bulk-btn .qa-icon-stack {
+    filter: brightness(0) invert(1);
 }
 
 /* ======================================================
