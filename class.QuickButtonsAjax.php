@@ -161,17 +161,19 @@ class QuickButtonsAjax extends AjaxController {
             if ($ids) {
                 $in = implode(',', $ids);
                 $res = db_query(
-                    "SELECT ticket_id, topic_id, dept_id, status_id, staff_id FROM "
+                    "SELECT ticket_id, topic_id, dept_id, status_id, staff_id, lastupdate FROM "
                     . TICKET_TABLE . " WHERE ticket_id IN ($in)");
                 if ($res) {
                     $map = array();
                     while ($row = db_fetch_array($res)) {
                         $tid = (string) $row['ticket_id'];
                         $map[$tid] = array(
-                            'topic'  => $row['topic_id'] ? (string) $row['topic_id'] : null,
-                            'dept'   => $row['dept_id'] ? (string) $row['dept_id'] : null,
-                            'status' => $row['status_id'] ? (string) $row['status_id'] : null,
-                            'staff'  => $row['staff_id'] ? (string) $row['staff_id'] : null,
+                            'topic'     => $row['topic_id'] ? (string) $row['topic_id'] : null,
+                            'dept'      => $row['dept_id'] ? (string) $row['dept_id'] : null,
+                            'status'    => $row['status_id'] ? (string) $row['status_id'] : null,
+                            'staff'     => $row['staff_id'] ? (string) $row['staff_id'] : null,
+                            'updated'   => $row['lastupdate'] ?: null,
+                            'serverNow' => date('Y-m-d H:i:s'),
                         );
                     }
                     $tickets = (object) $map;
@@ -196,6 +198,11 @@ class QuickButtonsAjax extends AjaxController {
             'cancel'       => __('Cancel'),
             'confirmStart' => __('Start working on ticket #%s?'),
             'confirmStop'  => __('Complete and hand off ticket #%s?'),
+            'undo'         => __('Undo'),
+            'undoExpired'  => __('Undo expired'),
+            'bulkStart'    => __('Start Selected'),
+            'bulkStop'     => __('Complete Selected'),
+            'elapsed'      => __('elapsed'),
         );
     }
 
@@ -284,10 +291,11 @@ class QuickButtonsAjax extends AjaxController {
 
         $clearTeam = ($action === 'stop' && !empty($deptCfg['clear_team']));
 
-        // Process tickets
+        // Process tickets — capture undo state
         $success = 0;
         $failed = 0;
         $errors_list = array();
+        $undoData = array();
 
         foreach ($tids as $tid) {
             $tid = (int) $tid;
@@ -302,14 +310,36 @@ class QuickButtonsAjax extends AjaxController {
 
             $ticketNum = $ticket->getNumber();
 
+            // Capture pre-action state for undo
+            $prevState = array(
+                'status_id' => $ticket->getStatusId(),
+                'staff_id'  => $ticket->getStaffId(),
+                'team_id'   => $ticket->getTeamId(),
+                'dept_id'   => $ticket->getDeptId(),
+            );
+
             if ($action === 'start') {
                 $ok = $this->doStart($ticket, $thisstaff, $targetStatus, $ticketNum, $errors_list);
             } else {
                 $ok = $this->doStop($ticket, $thisstaff, $targetStatus, $transferDept, $clearTeam, $ticketNum, $errors_list);
             }
 
-            if ($ok) $success++;
-            else $failed++;
+            if ($ok) {
+                $success++;
+                $undoData[$tid] = $prevState;
+            } else {
+                $failed++;
+            }
+        }
+
+        // Store undo data in session (last action only)
+        if (!empty($undoData)) {
+            $_SESSION['quick_buttons_undo'] = array(
+                'action'   => $action,
+                'tickets'  => $undoData,
+                'time'     => time(),
+                'staff_id' => $thisstaff->getId(),
+            );
         }
 
         // Response
@@ -331,10 +361,88 @@ class QuickButtonsAjax extends AjaxController {
             $_SESSION['::sysmsgs']['error'] = $message;
 
         Http::response(200, $this->json_encode(array(
-            'success' => $success,
-            'failed'  => $failed,
-            'errors'  => $errors_list,
-            'message' => $message,
+            'success'  => $success,
+            'failed'   => $failed,
+            'errors'   => $errors_list,
+            'message'  => $message,
+            'canUndo'  => !empty($undoData),
+        )));
+    }
+
+    /**
+     * POST /quick-buttons/undo
+     *
+     * Reverse the last Quick Buttons action (within 60 seconds).
+     */
+    function undo() {
+        $thisstaff = $this->requireStaff();
+
+        $undo = $_SESSION['quick_buttons_undo'] ?? null;
+        if (!$undo || empty($undo['tickets']))
+            Http::response(400, $this->json_encode(
+                array('error' => __('Nothing to undo'))));
+
+        // Only the same agent can undo, within 60 seconds
+        if ($undo['staff_id'] != $thisstaff->getId())
+            Http::response(403, $this->json_encode(
+                array('error' => __('Only the original agent can undo'))));
+
+        if (time() - $undo['time'] > 60)
+            Http::response(400, $this->json_encode(
+                array('error' => __('Undo expired (60 second limit)'))));
+
+        $restored = 0;
+        $errors_list = array();
+
+        foreach ($undo['tickets'] as $tid => $prevState) {
+            $ticket = Ticket::lookup($tid);
+            if (!$ticket) {
+                $errors_list[] = sprintf(__('Ticket #%d: not found'), $tid);
+                continue;
+            }
+
+            // Restore previous status
+            $prevStatus = TicketStatus::lookup($prevState['status_id']);
+            if ($prevStatus) {
+                $errors = array();
+                $ticket->setStatus($prevStatus,
+                    __('Status restored via Quick Buttons undo'), $errors);
+            }
+
+            // Restore previous assignment
+            if ($prevState['staff_id'])
+                $ticket->setStaffId($prevState['staff_id']);
+            else
+                $ticket->setStaffId(0);
+
+            // Restore department if changed
+            if ($prevState['dept_id'] != $ticket->getDeptId()) {
+                $prevDept = Dept::lookup($prevState['dept_id']);
+                if ($prevDept) {
+                    $form = TransferForm::instantiate(array('dept' => $prevDept->getId()));
+                    $errors = array();
+                    $ticket->transfer($form, $errors);
+                }
+            }
+
+            $ticket->save();
+            $restored++;
+        }
+
+        // Clear undo data
+        unset($_SESSION['quick_buttons_undo']);
+
+        $message = sprintf(
+            _N('%d ticket restored',
+               '%d tickets restored', $restored),
+            $restored);
+
+        $_SESSION['::sysmsgs']['msg'] = $message;
+
+        Http::response(200, $this->json_encode(array(
+            'restored' => $restored,
+            'errors'   => $errors_list,
+            'message'  => $message,
         )));
     }
 

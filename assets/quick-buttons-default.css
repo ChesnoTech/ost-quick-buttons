@@ -118,6 +118,15 @@ th.qa-actions-header {
     display: inline-block;
 }
 
+/* Timer, Undo, Bulk — same for both themes */
+.qa-timer { display: block; font-size: 9px; line-height: 1; margin-top: 1px; opacity: 0.9; font-family: monospace; }
+.qa-undo-bar { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #333; color: #fff; padding: 10px 20px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.3); z-index: 9999; display: flex; align-items: center; gap: 12px; font-size: 14px; }
+.qa-undo-link { color: #4fc3f7 !important; text-decoration: underline !important; cursor: pointer; font-weight: 600; }
+.qa-undo-countdown { opacity: 0.6; font-size: 12px; font-family: monospace; }
+.qa-bulk-toolbar { padding: 8px 12px; display: flex; gap: 8px; align-items: center; }
+.qa-bulk-btn { display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border: none; border-radius: 5px; color: #fff; font-size: 13px; cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,0.15); }
+.qa-bulk-btn:hover { opacity: 0.85; }
+
 /* ======================================================
    DARK MODE
    ====================================================== */
