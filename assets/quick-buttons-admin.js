@@ -102,6 +102,7 @@
             '<th class="qa-col-status">' + escapeHtml(i18n.start_target || 'Start: Target Status') + '</th>' +
             '<th class="qa-col-status">' + escapeHtml(i18n.stop_target || 'Stop: Target Status') + '</th>' +
             '<th class="qa-col-dept-sel">' + escapeHtml(i18n.stop_transfer || 'Stop: Transfer To') + '</th>' +
+            '<th class="qa-col-enabled">' + escapeHtml(i18n.clear_team || 'Clear Team') + '</th>' +
             '</tr></thead>' +
             '<tbody></tbody>' +
             '</table>'
@@ -154,6 +155,14 @@
                 '</td>'
             );
 
+            // Clear Team checkbox
+            $row.append(
+                '<td class="qa-cell-enabled">' +
+                '<input type="checkbox" class="qa-clear-team"' +
+                (cfg.clear_team ? ' checked' : '') + '>' +
+                '</td>'
+            );
+
             // Set existing values
             if (cfg.start_trigger_status)
                 $row.find('.qa-start-trigger').val(cfg.start_trigger_status);
@@ -183,8 +192,8 @@
             serializeConfig($textarea, $tbody);
         });
 
-        // Event: any dropdown change
-        $container.on('change', 'select', function() {
+        // Event: any dropdown or checkbox change
+        $container.on('change', 'select, .qa-clear-team', function() {
             serializeConfig($textarea, $tbody);
         });
 
@@ -214,7 +223,8 @@
                 start_trigger_status: $row.find('.qa-start-trigger').val() || '',
                 start_target_status: $row.find('.qa-start-target').val() || '',
                 stop_target_status: $row.find('.qa-stop-target').val() || '',
-                stop_transfer_dept: $row.find('.qa-stop-transfer').val() || ''
+                stop_transfer_dept: $row.find('.qa-stop-transfer').val() || '',
+                clear_team: $row.find('.qa-clear-team').is(':checked')
             };
         });
 

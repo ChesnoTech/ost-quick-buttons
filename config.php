@@ -1,4 +1,10 @@
 <?php
+/**
+ * Quick Buttons Plugin - Configuration
+ *
+ * @author  ChesnoTech
+ * @version 2.2.0
+ */
 
 require_once INCLUDE_DIR . 'class.forms.php';
 require_once INCLUDE_DIR . 'class.list.php';
@@ -9,7 +15,6 @@ class QuickButtonsConfig extends PluginConfig {
 
     function getOptions() {
 
-        // Build help topic choices
         $topics = array('' => '— ' . __('Select Help Topic') . ' —');
         global $cfg;
         if ($cfg) {
@@ -24,27 +29,55 @@ class QuickButtonsConfig extends PluginConfig {
                 'choices' => $topics,
                 'hint' => __('Each widget handles one help topic. Tickets with this topic will show Start/Stop buttons.'),
             )),
+            'start_label' => new TextboxField(array(
+                'label' => __('Start Button Label'),
+                'required' => false,
+                'default' => '',
+                'hint' => __('Custom label for the Start button tooltip. Leave empty for default ("Start").'),
+                'configuration' => array('size' => 20, 'length' => 30),
+            )),
+            'stop_label' => new TextboxField(array(
+                'label' => __('Stop Button Label'),
+                'required' => false,
+                'default' => '',
+                'hint' => __('Custom label for the Stop button tooltip. Leave empty for default ("Done").'),
+                'configuration' => array('size' => 20, 'length' => 30),
+            )),
+            'start_color' => new TextboxField(array(
+                'label' => __('Start Button Color'),
+                'required' => false,
+                'default' => '',
+                'hint' => __('Hex color for Start button (e.g. #128DBE). Leave empty for default blue.'),
+                'configuration' => array('size' => 10, 'length' => 7),
+            )),
+            'stop_color' => new TextboxField(array(
+                'label' => __('Stop Button Color'),
+                'required' => false,
+                'default' => '',
+                'hint' => __('Hex color for Stop button (e.g. #27ae60). Leave empty for default green.'),
+                'configuration' => array('size' => 10, 'length' => 7),
+            )),
+            'confirm_actions' => new BooleanField(array(
+                'label' => __('Require Confirmation'),
+                'default' => true,
+                'configuration' => array(
+                    'desc' => __('Show confirmation dialog before executing Start/Stop actions'),
+                ),
+            )),
             'widget_config' => new TextboxField(array(
                 'label' => __('Widget Configuration'),
                 'required' => false,
                 'default' => '{}',
                 'hint' => __('Per-department button configuration (managed by the UI below).'),
-                'configuration' => array(
-                    'size' => 80,
-                    'length' => 65000,
-                ),
+                'configuration' => array('size' => 80, 'length' => 65000),
             )),
         );
     }
 
-    /**
-     * Parse the widget_config JSON into a PHP array.
-     */
     function getWidgetConfig() {
         $raw = $this->get('widget_config');
         if (!$raw)
             return array('departments' => array());
-        // Strip any HTML tags (Redactor may have wrapped content in <p> tags)
         $raw = strip_tags($raw);
         $data = @json_decode($raw, true);
         if (!is_array($data))
@@ -54,13 +87,22 @@ class QuickButtonsConfig extends PluginConfig {
 
     function pre_save(&$config, &$errors) {
 
-        // Topic is required
         if (empty($config['topic_id'])) {
             $errors['err'] = __('A help topic must be selected');
             return false;
         }
 
-        // Parse widget config JSON (strip any HTML tags from Redactor)
+        // Validate colors if provided
+        foreach (array('start_color', 'stop_color') as $field) {
+            if (!empty($config[$field])) {
+                $color = trim($config[$field]);
+                if (!preg_match('/^#[0-9A-Fa-f]{3,6}$/', $color)) {
+                    $errors['err'] = __('Button color must be a valid hex color (e.g., #128DBE)');
+                    return false;
+                }
+            }
+        }
+
         $raw = $config['widget_config'] ?? '{}';
         $raw = strip_tags($raw);
         $data = @json_decode($raw, true);
@@ -71,60 +113,37 @@ class QuickButtonsConfig extends PluginConfig {
 
         $depts = $data['departments'] ?? array();
 
-        // Check at least one department is enabled
-        $hasEnabled = false;
         foreach ($depts as $deptId => $deptCfg) {
             if (empty($deptCfg['enabled']))
                 continue;
-            $hasEnabled = true;
 
-            // Validate required fields for enabled departments
-            if (empty($deptCfg['start_trigger_status'])) {
-                $errors['err'] = sprintf(
-                    __('Department %s: Start trigger status is required'),
-                    $deptId);
-                return false;
-            }
-            if (empty($deptCfg['start_target_status'])) {
-                $errors['err'] = sprintf(
-                    __('Department %s: Start target status is required'),
-                    $deptId);
-                return false;
-            }
-            if (empty($deptCfg['stop_target_status'])) {
-                $errors['err'] = sprintf(
-                    __('Department %s: Stop target status is required'),
-                    $deptId);
-                return false;
-            }
-            if (empty($deptCfg['stop_transfer_dept'])) {
-                $errors['err'] = sprintf(
-                    __('Department %s: Stop transfer department is required'),
-                    $deptId);
-                return false;
-            }
-
-            // Validate statuses exist
+            // Required: trigger and target statuses
             foreach (array('start_trigger_status', 'start_target_status', 'stop_target_status') as $field) {
-                $sid = $deptCfg[$field];
-                if (!TicketStatus::lookup($sid)) {
+                if (empty($deptCfg[$field])) {
+                    $errors['err'] = sprintf(
+                        __('Department %s: %s is required'),
+                        $deptId, $field);
+                    return false;
+                }
+                if (!TicketStatus::lookup($deptCfg[$field])) {
                     $errors['err'] = sprintf(
                         __('Department %s: Status ID %s not found'),
-                        $deptId, $sid);
+                        $deptId, $deptCfg[$field]);
                     return false;
                 }
             }
 
-            // Validate transfer dept exists
-            if (!Dept::lookup($deptCfg['stop_transfer_dept'])) {
-                $errors['err'] = sprintf(
-                    __('Department %s: Transfer department not found'),
-                    $deptId);
-                return false;
+            // Transfer dept is optional (empty = no transfer, e.g., mid-step in chain)
+            if (!empty($deptCfg['stop_transfer_dept'])) {
+                if (!Dept::lookup($deptCfg['stop_transfer_dept'])) {
+                    $errors['err'] = sprintf(
+                        __('Department %s: Transfer department not found'),
+                        $deptId);
+                    return false;
+                }
             }
         }
 
-        // Allow saving with no enabled departments (initial setup)
         return true;
     }
 }
