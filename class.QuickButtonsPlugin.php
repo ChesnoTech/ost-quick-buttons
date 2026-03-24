@@ -51,6 +51,7 @@ class QuickButtonsPlugin extends Plugin {
                 url('^widgets$', 'getWidgets'),
                 url_post('^execute$', 'execute'),
                 url_post('^undo$', 'undo'),
+                url_get('^dashboard$', 'dashboard'),
                 url_get('^admin-config-data$', 'getAdminConfigData'),
                 url_get('^assets/js$', 'serveJs'),
                 url_get('^assets/css$', 'serveCss'),

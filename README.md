@@ -121,6 +121,27 @@ The widgets chain automatically through matching statuses.
   - **Transfer**: requires `Ticket::PERM_TRANSFER`
   - **Release**: requires `Ticket::PERM_RELEASE`
 
+## Dashboard
+
+The plugin includes a built-in workflow dashboard accessible from the plugin admin page (Dashboard tab). It shows:
+
+- **Tickets Per Day** — bar chart of daily status change throughput
+- **Average Time Per Step** — how long tickets spend in each status
+- **Agent Leaderboard** — top agents by tickets claimed
+- **Current Queue** — snapshot of open tickets by status
+
+Supports 7-day, 30-day, and 90-day time ranges.
+
+## Testing
+
+Run the self-contained test suite (no osTicket bootstrap required):
+
+```bash
+php tests/QuickButtonsTest.php
+```
+
+53 tests covering: choiceKey extraction, JSON parsing, config validation, duration formatting, button resolution logic, and undo state management.
+
 ## File Structure
 
 ```
