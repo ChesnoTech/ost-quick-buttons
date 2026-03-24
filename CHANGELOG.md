@@ -1,5 +1,21 @@
 # Changelog
 
+## [2.2.0] - 2026-03-24
+
+### Added
+- **Confirmation dialog** before Start/Stop execution (configurable per widget)
+- **Error recovery** — rollback claim if status change fails during Start
+- **Double-click protection** — client-side debounce prevents duplicate requests
+- **Permission-based button visibility** — hides buttons if agent lacks required permissions
+- **Customizable labels and colors** — per-widget Start/Stop label and color overrides
+- **Bulk action support** — execute Start/Stop on multiple selected tickets
+- **Team assignment option** — "Clear Team" checkbox per department on Stop action
+- **Agent permissions in API** — widgets endpoint returns canAssign, canTransfer, canRelease, canManage
+
+### Fixed
+- Transfer department no longer required (allows mid-chain steps with no transfer)
+- Color validation for custom button colors
+
 ## [2.1.0] - 2026-03-24
 
 ### Added
