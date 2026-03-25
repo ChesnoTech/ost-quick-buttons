@@ -45,6 +45,7 @@ th.qa-actions-header {
     min-height: 28px;
     border-radius: 5px;
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
     color: #fff !important;
@@ -55,6 +56,7 @@ th.qa-actions-header {
     cursor: pointer;
     box-shadow: 0 1px 3px rgba(0,0,0,0.15);
     flex-shrink: 0;
+    overflow: hidden;
 }
 
 .qa-inline-btn:hover {
@@ -78,11 +80,12 @@ th.qa-actions-header {
 /* Stacked icon in inline buttons — use fixed 20px sizing to match
    svg.css which renders icon ::before as 20x20 SVG backgrounds. */
 .qa-inline-btn .qa-icon-stack {
-    display: inline-block;
+    display: inline-block !important;
     position: relative;
-    width: 20px;
-    height: 20px;
+    width: 20px !important;
+    height: 20px !important;
     line-height: 20px;
+    flex-shrink: 0;
 }
 
 .qa-inline-btn .qa-icon-stack .icon-stack-base {
@@ -130,6 +133,7 @@ th.qa-actions-header {
    Keep them at 20x20 for the base icon, scale down for the light overlay. */
 .qa-inline-btn .qa-icon-stack i {
     display: block !important;
+    top: auto !important;
     line-height: 20px !important;
     margin: 0 !important;
     filter: brightness(0) invert(1) !important;

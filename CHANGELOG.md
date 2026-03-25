@@ -1,5 +1,10 @@
 # Changelog
 
+## [2.5.0] - 2026-03-25
+
+### Fixed
+- **Stacked icon centering** — osTicketAwesome svg.css `top: 4px` rule leaked into stacked icon overlay (`icon-share`), pushing it off-center in green Done buttons. Added `top: auto !important` to `.qa-inline-btn .qa-icon-stack i` rule.
+
 ## [2.4.0] - 2026-03-24
 
 ### Added
