@@ -19,6 +19,11 @@ Built by [ChesnoTech](https://github.com/ChesnoTech).
 - **Auto-release + transfer on Stop** — releases agent and moves ticket to the next department
 - **osTicket access role integration** — respects department access and permissions
 - **Desktop + Mobile responsive** — sticky column on desktop, card layout on mobile
+- **Three confirmation modes** — None (instant), Confirm Dialog, or Countdown with cancel window
+- **Countdown popup** — auto-execute after configurable timer (3–10s) with progress bar and cancel button
+- **Undo support** — 60-second undo window after any action
+- **Live elapsed timer** — shows how long an agent has been working on a ticket
+- **Error recovery** — rollback claim if status change fails
 - **Dark mode support**
 - **Theme auto-detection** — works with both osTicketAwesome and default osTicket theme
 
@@ -97,6 +102,22 @@ Different agents can handle each step. Platform builders pick up "Collecting Par
 |--------|------|-------|---------|
 | **Start** | ▶ Play | Blue (#128DBE) | Claim ticket + Change status |
 | **Stop** | ✓ Done | Green (#27ae60) | Change status + Release agent + Transfer (optional) |
+
+### Confirmation Modes
+
+Each widget can be configured with one of three confirmation modes:
+
+| Mode | Behavior | Best For |
+|------|----------|----------|
+| **None** | Instant execution on click | Trusted agents, low-risk actions |
+| **Confirm Dialog** | Modal dialog with Confirm/Cancel buttons | Critical workflows, training |
+| **Countdown** | Auto-executes after N seconds with cancel window | High-volume workflows (40+ tickets/day) |
+
+The **Countdown** mode shows a popup near the button with:
+- Action description (what will happen)
+- Countdown timer with animated progress bar
+- Cancel button to abort before execution
+- Configurable duration (3–10 seconds per widget)
 
 ### Multi-Step Setup
 
