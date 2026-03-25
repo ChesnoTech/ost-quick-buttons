@@ -398,12 +398,18 @@
                 var template = action === 'start' ? QA.i18n.confirmStart : QA.i18n.confirmStop;
                 var message = template.replace('%s', ticketNum);
 
-                if ($.dialog) {
-                    $.dialog('<p>' + QA.escapeHtml(message) + '</p>', 201,
-                        function() { doExecute(); }, { size: 'small' });
-                } else if (confirm(message)) {
-                    doExecute();
-                }
+                // Use jQuery UI dialog for confirmation ($.dialog is osTicket's URL-based dialog)
+                var $dlg = $('<div>').text(message);
+                $dlg.dialog({
+                    title: QA.i18n.confirm,
+                    modal: true,
+                    width: 350,
+                    buttons: [
+                        { text: QA.i18n.confirm, click: function() { $(this).dialog('close'); doExecute(); } },
+                        { text: QA.i18n.cancel, click: function() { $(this).dialog('close'); } }
+                    ],
+                    close: function() { $(this).remove(); }
+                });
             } else {
                 doExecute();
             }
