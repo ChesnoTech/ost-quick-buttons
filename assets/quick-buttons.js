@@ -13,6 +13,9 @@
         i18n: { start: 'Start', done: 'Done', error: 'Error', confirm: 'Confirm',
                 cancel: 'Cancel', confirmStart: 'Start working on ticket #%s?',
                 confirmStop: 'Complete and hand off ticket #%s?',
+                countdownStart: 'Claim ticket and change status to working',
+                countdownStop: 'Change status, release agent and transfer',
+                executingIn: 'Executing in %ss...',
                 undo: 'Undo', bulkStart: 'Start Selected', bulkStop: 'Complete Selected',
                 elapsed: 'elapsed' },
         perms: { canAssign: true, canTransfer: true, canRelease: true, canManage: true },
@@ -92,7 +95,9 @@
                     action: action, widgetId: w.id, deptId: ticketDept,
                     startLabel: w.startLabel, stopLabel: w.stopLabel,
                     startColor: w.startColor, stopColor: w.stopColor,
-                    confirm: w.confirm
+                    confirm: w.confirm,
+                    confirmMode: w.confirmMode || (w.confirm ? 'confirm' : 'none'),
+                    countdownSeconds: w.countdownSeconds || 5
                 };
             }
             return null;
@@ -133,7 +138,8 @@
                         'data-action': resolved.action,
                         'data-dept-id': resolved.deptId,
                         'data-ticket-id': ticketId,
-                        'data-confirm': resolved.confirm ? '1' : '0',
+                        'data-confirm-mode': resolved.confirmMode,
+                        'data-countdown': resolved.countdownSeconds,
                         'title': label
                     })
                     .css('background-color', color)
@@ -354,7 +360,8 @@
             var action = $btn.data('action');
             var deptId = $btn.data('dept-id');
             var ticketId = $btn.data('ticket-id');
-            var needConfirm = $btn.data('confirm') === 1 || $btn.data('confirm') === '1';
+            var confirmMode = $btn.data('confirm-mode') || 'none';
+            var countdownSec = parseInt($btn.data('countdown'), 10) || 5;
 
             if (!widgetId || !action || !ticketId) return false;
             if (QA.executing[ticketId]) return false;
@@ -392,13 +399,13 @@
                 });
             };
 
-            if (needConfirm) {
-                var $row = $btn.closest('tr');
-                var ticketNum = $row.find('a[href*="tickets.php"]').first().text().trim() || ticketId;
+            var $row = $btn.closest('tr');
+            var ticketNum = $row.find('a[href*="tickets.php"]').first().text().trim() || ticketId;
+
+            if (confirmMode === 'confirm') {
                 var template = action === 'start' ? QA.i18n.confirmStart : QA.i18n.confirmStop;
                 var message = template.replace('%s', ticketNum);
 
-                // Use jQuery UI dialog for confirmation ($.dialog is osTicket's URL-based dialog)
                 var $dlg = $('<div>').text(message);
                 $dlg.dialog({
                     title: QA.i18n.confirm,
@@ -410,6 +417,10 @@
                     ],
                     close: function() { $(this).remove(); }
                 });
+
+            } else if (confirmMode === 'countdown') {
+                QA.showCountdown($btn, ticketNum, action, countdownSec, doExecute);
+
             } else {
                 doExecute();
             }
@@ -433,6 +444,98 @@
             if (!str) return '';
             return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;')
                 .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+        },
+
+        // ================================================================
+        //  Countdown confirmation popup
+        // ================================================================
+
+        showCountdown: function($btn, ticketNum, action, seconds, onExecute) {
+            // Remove any existing countdown popup
+            $('.qa-countdown-popup').remove();
+
+            var remaining = seconds;
+            var cancelled = false;
+            var icon = action === 'start' ? QA.START_ICON : QA.STOP_ICON;
+            var color = action === 'start' ? QA.START_COLOR : QA.STOP_COLOR;
+            var title = (action === 'start' ? '▶ ' + QA.i18n.start : '✓ ' + QA.i18n.done) +
+                        ' — Ticket #' + QA.escapeHtml(ticketNum);
+            var desc = action === 'start' ? QA.i18n.countdownStart : QA.i18n.countdownStop;
+
+            var $popup = $('<div class="qa-countdown-popup"></div>');
+            var $title = $('<div class="qa-cd-title"></div>').text(title);
+            var $desc = $('<div class="qa-cd-desc"></div>').text(desc);
+            var $timer = $('<div class="qa-cd-timer"></div>');
+            var $timerText = $('<span class="qa-cd-timer-text"></span>');
+            var $cancelBtn = $('<button class="qa-cd-cancel"></button>').text(QA.i18n.cancel);
+            var $bar = $('<div class="qa-cd-bar"><div class="qa-cd-bar-fill"></div></div>');
+
+            $timer.append($timerText).append($cancelBtn);
+            $popup.append($title).append($desc).append($timer).append($bar);
+            $popup.css('border-left-color', color);
+
+            // Position near the button
+            var btnRect = $btn[0].getBoundingClientRect();
+            var scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+            $popup.css({
+                position: 'absolute',
+                top: (btnRect.top + scrollTop - 10) + 'px',
+                right: '50px',
+                zIndex: 10000
+            });
+
+            $('body').append($popup);
+
+            // Animate progress bar
+            var $fill = $popup.find('.qa-cd-bar-fill');
+            $fill.css({ width: '100%', backgroundColor: color });
+
+            // Update timer text
+            var updateTimer = function() {
+                $timerText.text(QA.i18n.executingIn.replace('%s', remaining));
+            };
+            updateTimer();
+
+            // Start CSS transition for progress bar
+            requestAnimationFrame(function() {
+                $fill.css({
+                    transition: 'width ' + seconds + 's linear',
+                    width: '0%'
+                });
+            });
+
+            // Countdown interval
+            var intervalId = setInterval(function() {
+                remaining--;
+                if (remaining <= 0) {
+                    clearInterval(intervalId);
+                    if (!cancelled) {
+                        $popup.remove();
+                        onExecute();
+                    }
+                } else {
+                    updateTimer();
+                }
+            }, 1000);
+
+            // Cancel button
+            $cancelBtn.on('click', function() {
+                cancelled = true;
+                clearInterval(intervalId);
+                $popup.addClass('qa-cd-cancelled');
+                setTimeout(function() { $popup.remove(); }, 300);
+            });
+
+            // Click outside to cancel
+            setTimeout(function() {
+                $(document).one('click.qa-countdown', function(e) {
+                    if (!$(e.target).closest('.qa-countdown-popup').length && !cancelled) {
+                        cancelled = true;
+                        clearInterval(intervalId);
+                        $popup.remove();
+                    }
+                });
+            }, 100);
         }
     };
 

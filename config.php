@@ -57,12 +57,23 @@ class QuickButtonsConfig extends PluginConfig {
                 'hint' => __('Hex color for Stop button (e.g. #27ae60). Leave empty for default green.'),
                 'configuration' => array('size' => 10, 'length' => 7),
             )),
-            'confirm_actions' => new BooleanField(array(
-                'label' => __('Require Confirmation'),
-                'default' => true,
-                'configuration' => array(
-                    'desc' => __('Show confirmation dialog before executing Start/Stop actions'),
+            'confirm_mode' => new ChoiceField(array(
+                'label' => __('Confirmation Mode'),
+                'required' => true,
+                'default' => 'confirm',
+                'choices' => array(
+                    'none'      => __('None — Execute immediately'),
+                    'confirm'   => __('Confirm Dialog — Requires explicit click'),
+                    'countdown' => __('Countdown — Auto-execute with cancel window'),
                 ),
+                'hint' => __('How to confirm actions before execution.'),
+            )),
+            'countdown_seconds' => new TextboxField(array(
+                'label' => __('Countdown Seconds'),
+                'required' => false,
+                'default' => '5',
+                'hint' => __('Seconds before auto-execute in Countdown mode (3–10). Only used when mode is "Countdown".'),
+                'configuration' => array('size' => 5, 'length' => 2),
             )),
             'widget_config' => new TextboxField(array(
                 'label' => __('Widget Configuration'),

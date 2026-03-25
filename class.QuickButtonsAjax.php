@@ -139,17 +139,24 @@ class QuickButtonsAjax extends AjaxController {
             $stopLabel  = $config->get('stop_label') ?: '';
             $startColor = $config->get('start_color') ?: '';
             $stopColor  = $config->get('stop_color') ?: '';
-            $confirm    = (bool) $config->get('confirm_actions');
+            // Confirmation mode: none, confirm, countdown
+            $confirmMode = $config->get('confirm_mode') ?: 'confirm';
+            // Handle legacy BooleanField migration (1 = confirm, '' = none)
+            if ($confirmMode === '1') $confirmMode = 'confirm';
+            if ($confirmMode === '' || $confirmMode === '0') $confirmMode = 'none';
+            $countdownSec = max(3, min(10, (int) ($config->get('countdown_seconds') ?: 5)));
 
             $widgets[] = array(
-                'id'          => $instance->getId(),
-                'topic'       => $topicId,
-                'depts'       => $deptConfigs,
-                'startLabel'  => $startLabel,
-                'stopLabel'   => $stopLabel,
-                'startColor'  => $startColor,
-                'stopColor'   => $stopColor,
-                'confirm'     => $confirm,
+                'id'             => $instance->getId(),
+                'topic'          => $topicId,
+                'depts'          => $deptConfigs,
+                'startLabel'     => $startLabel,
+                'stopLabel'      => $stopLabel,
+                'startColor'     => $startColor,
+                'stopColor'      => $stopColor,
+                'confirm'        => $confirmMode !== 'none', // backward compat
+                'confirmMode'    => $confirmMode,
+                'countdownSeconds' => $countdownSec,
             );
         }
 
@@ -198,6 +205,9 @@ class QuickButtonsAjax extends AjaxController {
             'cancel'       => __('Cancel'),
             'confirmStart' => __('Start working on ticket #%s?'),
             'confirmStop'  => __('Complete and hand off ticket #%s?'),
+            'countdownStart'    => __('Claim ticket and change status to working'),
+            'countdownStop'     => __('Change status, release agent and transfer'),
+            'executingIn'       => __('Executing in %ss...'),
             'undo'         => __('Undo'),
             'undoExpired'  => __('Undo expired'),
             'bulkStart'    => __('Start Selected'),
