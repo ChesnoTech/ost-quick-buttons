@@ -694,6 +694,7 @@ class QuickButtonsAjax extends AjaxController {
                 'totalProcessed'    => __('Total Processed'),
                 'days'              => __('days'),
                 'dailyThroughput'   => __('Daily Throughput'),
+                'weeklyThroughput'  => __('Weekly Throughput'),
                 'avgTimePerStep'    => __('Average Time Per Step'),
                 'status'            => __('Status'),
                 'avgTime'           => __('Avg Time'),

@@ -99,16 +99,26 @@
         // ── Charts Grid ──
         html += '<div class="wd-grid">';
 
-        // Daily throughput bar chart
+        // Throughput bar chart — adaptive: daily for 7/30d, weekly for 90d
         html += '<div class="wd-card wd-card-full">';
-        html += '<h3>' + esc(t('dailyThroughput')) + '</h3>';
+        var isWeekly = currentDays >= 60;
+        html += '<h3>' + esc(isWeekly ? t('weeklyThroughput') : t('dailyThroughput')) + '</h3>';
         if (data.daily && data.daily.length) {
-            var maxCount = Math.max.apply(null, data.daily.map(function(d) { return d.count; }));
-            var recent = data.daily.slice(-14); // Show last 14 days max
-            recent.forEach(function(d) {
+            var chartData;
+            if (isWeekly) {
+                // Roll up into weeks
+                chartData = rollupWeekly(data.daily);
+            } else {
+                // Show last 14 days for daily view
+                chartData = data.daily.slice(-14).map(function(d) {
+                    return { label: d.day.substring(5), count: d.count };
+                });
+            }
+            var maxCount = Math.max.apply(null, chartData.map(function(d) { return d.count; }));
+            chartData.forEach(function(d) {
                 var pct = maxCount > 0 ? Math.round((d.count / maxCount) * 100) : 0;
                 html += '<div class="wd-bar-row">';
-                html += '<span class="wd-bar-label">' + d.day.substring(5) + '</span>';
+                html += '<span class="wd-bar-label">' + d.label + '</span>';
                 html += '<div class="wd-bar-track"><div class="wd-bar-fill" style="width:' + pct + '%"></div></div>';
                 html += '<span class="wd-bar-value">' + d.count + '</span>';
                 html += '</div>';
@@ -175,6 +185,26 @@
         html += '</div>'; // grid
 
         container.innerHTML = html;
+    }
+
+    function rollupWeekly(daily) {
+        var weeks = [];
+        var current = { label: '', count: 0, start: '' };
+        daily.forEach(function(d, i) {
+            if (i % 7 === 0 && i > 0) {
+                current.label = current.start + '\u2013' + daily[i - 1].day.substring(5);
+                weeks.push(current);
+                current = { label: '', count: 0, start: d.day.substring(5) };
+            }
+            if (!current.start) current.start = d.day.substring(5);
+            current.count += d.count;
+        });
+        // Push remaining
+        if (current.count > 0 || current.start) {
+            current.label = current.start + '\u2013' + daily[daily.length - 1].day.substring(5);
+            weeks.push(current);
+        }
+        return weeks;
     }
 
     function kpiCard(color, label, value, sub) {
