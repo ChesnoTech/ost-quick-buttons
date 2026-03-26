@@ -739,34 +739,26 @@ class QuickButtonsAjax extends AjaxController {
      * Query params: days (default 7)
      */
     function dashboard() {
-        $this->requireStaff();
+        $thisstaff = $this->requireStaff();
 
         $days = max(1, min(90, (int) ($_GET['days'] ?? 7)));
         $since = date('Y-m-d H:i:s', strtotime("-{$days} days"));
 
-        // Get all Quick Buttons widget statuses for filtering
-        $plugin = self::findPlugin();
-        $statusIds = array();
-        if ($plugin) {
-            foreach ($plugin->getActiveInstances() as $instance) {
-                $config = $instance->getConfig();
-                if (!$config) continue;
-                $data = self::parseWidgetConfig($config);
-                foreach (($data['departments'] ?? array()) as $deptCfg) {
-                    if (empty($deptCfg['enabled'])) continue;
-                    foreach (array('start_trigger_status','start_target_status','stop_target_status') as $f)
-                        if (!empty($deptCfg[$f])) $statusIds[$deptCfg[$f]] = true;
-                }
-            }
-        }
+        // Access control: filter by agent's accessible departments
+        $deptIds = $thisstaff->getDepts();
+        if (empty($deptIds))
+            $deptIds = array($thisstaff->getDeptId());
+        $deptIn = implode(',', array_map('intval', $deptIds));
 
-        // 1. Tickets processed per day (status change events)
+        // 1. Tickets processed per day — filtered by dept
         $dailyRes = db_query(
             "SELECT DATE(e.timestamp) as day, COUNT(*) as cnt
              FROM ost_thread_event e
-             JOIN ost_thread t ON e.thread_id = t.id AND t.object_type = 'T'
+             JOIN ost_thread th ON e.thread_id = th.id AND th.object_type = 'T'
+             JOIN ost_ticket tk ON th.object_id = tk.ticket_id
              WHERE e.event_id = 9 AND e.timestamp >= '{$since}'
                AND e.data LIKE '%\"status\"%'
+               AND tk.dept_id IN ({$deptIn})
              GROUP BY DATE(e.timestamp)
              ORDER BY day");
         $daily = array();
@@ -774,14 +766,16 @@ class QuickButtonsAjax extends AjaxController {
             while ($row = db_fetch_array($dailyRes))
                 $daily[] = array('day' => $row['day'], 'count' => (int) $row['cnt']);
 
-        // 2. Average time per step (time between consecutive status changes per ticket)
+        // 2. Average time per step — filtered by dept
         $stepTimesRes = db_query(
-            "SELECT t.object_id as ticket_id, e.data, e.timestamp
+            "SELECT th.object_id as ticket_id, e.data, e.timestamp
              FROM ost_thread_event e
-             JOIN ost_thread t ON e.thread_id = t.id AND t.object_type = 'T'
+             JOIN ost_thread th ON e.thread_id = th.id AND th.object_type = 'T'
+             JOIN ost_ticket tk ON th.object_id = tk.ticket_id
              WHERE e.event_id = 9 AND e.timestamp >= '{$since}'
                AND e.data LIKE '%\"status\"%'
-             ORDER BY t.object_id, e.timestamp");
+               AND tk.dept_id IN ({$deptIn})
+             ORDER BY th.object_id, e.timestamp");
         $stepDurations = array();
         $prevByTicket = array();
         if ($stepTimesRes) {
@@ -804,7 +798,6 @@ class QuickButtonsAjax extends AjaxController {
             }
         }
 
-        // Build avg times with status names
         $avgTimes = array();
         foreach ($stepDurations as $statusId => $data) {
             $status = TicketStatus::lookup($statusId);
@@ -818,13 +811,15 @@ class QuickButtonsAjax extends AjaxController {
             );
         }
 
-        // 3. Agent leaderboard (claims in period)
+        // 3. Agent leaderboard — only agents in accessible depts
         $agentRes = db_query(
             "SELECT e.staff_id, s.firstname, s.lastname, COUNT(*) as cnt
              FROM ost_thread_event e
-             JOIN ost_thread t ON e.thread_id = t.id AND t.object_type = 'T'
+             JOIN ost_thread th ON e.thread_id = th.id AND th.object_type = 'T'
+             JOIN ost_ticket tk ON th.object_id = tk.ticket_id
              LEFT JOIN ost_staff s ON e.staff_id = s.staff_id
              WHERE e.event_id = 4 AND e.timestamp >= '{$since}'
+               AND tk.dept_id IN ({$deptIn})
              GROUP BY e.staff_id
              ORDER BY cnt DESC
              LIMIT 20");
@@ -836,12 +831,13 @@ class QuickButtonsAjax extends AjaxController {
                     'count' => (int) $row['cnt'],
                 );
 
-        // 4. Current queue snapshot
+        // 4. Current queue — only tickets in accessible depts
         $queueRes = db_query(
             "SELECT s.id, s.name, COUNT(*) as cnt
-             FROM ost_ticket t
-             JOIN ost_ticket_status s ON t.status_id = s.id
+             FROM ost_ticket tk
+             JOIN ost_ticket_status s ON tk.status_id = s.id
              WHERE s.state = 'open'
+               AND tk.dept_id IN ({$deptIn})
              GROUP BY s.id
              ORDER BY s.sort");
         $queue = array();
