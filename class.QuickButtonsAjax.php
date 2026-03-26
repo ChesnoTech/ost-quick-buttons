@@ -147,6 +147,7 @@ class QuickButtonsAjax extends AjaxController {
             'csrfToken'    => $this->getCsrfToken(),
             'saveUrl'      => ROOT_PATH . 'scp/ajax.php/quick-buttons/workflow-builder-save?iid=' . $iid,
             'backUrl'      => ROOT_PATH . 'scp/plugins.php?id=' . $plugin->getId() . '&xid=' . $iid . '#config',
+            'i18n'         => $this->getWorkflowBuilderI18n(),
         );
 
         // Serve HTML page
@@ -202,6 +203,63 @@ class QuickButtonsAjax extends AjaxController {
 
     private function getCsrfToken() {
         return csrf_token();
+    }
+
+    private function getWorkflowBuilderI18n() {
+        return array(
+            // Header
+            'workflowBuilder'   => __('Workflow Builder'),
+            'back'              => __('Back'),
+
+            // Toolbar
+            'searchDepts'       => __('Search departments...'),
+            'enableAll'         => __('Enable All'),
+            'disableAll'        => __('Disable All'),
+            'enabledCount'      => __('%d / %d enabled'),
+
+            // Card
+            'trigger'           => __('Trigger'),
+            'working'           => __('Working'),
+            'done'              => __('Done'),
+            'transferTo'        => __('Transfer to:'),
+            'clearTeam'         => __('Clear team on transfer'),
+            'selectStatus'      => __('-- Select --'),
+            'selectNone'        => __('-- None --'),
+
+            // Actions
+            'copyTo'            => __('Copy to...'),
+            'applyTemplate'     => __('Apply template...'),
+            'tplSingleStep'     => __('Single Step'),
+            'tplStep1'          => __('Assembly Step 1 (no transfer)'),
+            'tplStep2'          => __('Assembly Step 2 (with transfer)'),
+
+            // Validation
+            'triggerRequired'   => __('Trigger status is required'),
+            'workingRequired'   => __('Working status is required'),
+            'doneRequired'      => __('Done status is required'),
+            'triggerEqualsWorking' => __('Trigger and Working are the same status (Start button will do nothing visible)'),
+            'doneEqualsTrigger' => __('Done status equals Trigger — this creates an infinite loop'),
+            'workingEqualsDone' => __('Working and Done are the same status (Stop button will do nothing visible)'),
+
+            // Footer
+            'noUnsaved'         => __('No unsaved changes'),
+            'unsavedChanges'    => __('Unsaved changes'),
+            'allSaved'          => __('All changes saved'),
+            'cancel'            => __('Cancel'),
+            'saveChanges'       => __('Save Changes'),
+            'saving'            => __('Saving...'),
+            'saved'             => __('Saved!'),
+            'saveFailed'        => __('Save failed'),
+            'networkError'      => __('Network error'),
+
+            // Dialogs
+            'discardChanges'    => __('Discard unsaved changes?'),
+            'copyPrompt'        => __('Copy this configuration to which department?'),
+            'deptNotFound'      => __('Department not found: %s'),
+            'copiedTo'          => __('Copied to %s'),
+            'templateApplied'   => __('Template applied — select statuses for each step'),
+            'loading'           => __('Loading dashboard...'),
+        );
     }
 
     private function renderWorkflowBuilderHtml($data) {
