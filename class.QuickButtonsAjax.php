@@ -700,7 +700,10 @@ class QuickButtonsAjax extends AjaxController {
                 'avgTime'           => __('Avg Time'),
                 'transitions'       => __('Transitions'),
                 'agentLeaderboard'  => __('Agent Leaderboard'),
+                'myPerformance'     => __('My Performance'),
                 'currentQueue'      => __('Current Queue'),
+                'myQueue'           => __('My Assigned Tickets'),
+                'claimed'           => __('Claimed'),
                 'noData'            => __('No data for this period'),
             ),
         );
