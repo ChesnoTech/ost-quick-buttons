@@ -847,27 +847,36 @@ class QuickButtonsAjax extends AjaxController {
                     'count'      => (int) $row['cnt'],
                 );
 
+        // Access mode flag — tells JS how to render
+        $accessMode = 'full'; // admin or normal agent
+        if ($thisstaff->isAccessLimited())
+            $accessMode = 'limited'; // assigned_only agent
+
         return $this->json_encode(array(
-            'days'     => $days,
-            'daily'    => $daily,
-            'avgTimes' => $avgTimes,
-            'agents'   => $agents,
-            'queue'    => $queue,
-            'i18n'     => array(
-                'dashboard'     => __('Workflow Dashboard'),
-                'ticketsPerDay' => __('Tickets Processed Per Day'),
-                'avgTimePerStep'=> __('Average Time Per Step'),
-                'agentLeader'   => __('Agent Leaderboard'),
-                'currentQueue'  => __('Current Queue'),
-                'status'        => __('Status'),
-                'avgTime'       => __('Avg Time'),
-                'transitions'   => __('Transitions'),
-                'agent'         => __('Agent'),
-                'claimed'       => __('Claimed'),
-                'tickets'       => __('Tickets'),
-                'last7days'     => __('Last 7 Days'),
-                'last30days'    => __('Last 30 Days'),
-                'last90days'    => __('Last 90 Days'),
+            'days'       => $days,
+            'daily'      => $daily,
+            'avgTimes'   => $avgTimes,
+            'agents'     => $agents,
+            'queue'      => $queue,
+            'accessMode' => $accessMode,
+            'staffName'  => $thisstaff->getName()->getOriginal(),
+            'i18n'       => array(
+                'dashboard'      => __('Workflow Dashboard'),
+                'ticketsPerDay'  => __('Tickets Processed Per Day'),
+                'avgTimePerStep' => __('Average Time Per Step'),
+                'agentLeader'    => __('Agent Leaderboard'),
+                'myPerformance'  => __('My Performance'),
+                'currentQueue'   => __('Current Queue'),
+                'myQueue'        => __('My Assigned Tickets'),
+                'status'         => __('Status'),
+                'avgTime'        => __('Avg Time'),
+                'transitions'    => __('Transitions'),
+                'agent'          => __('Agent'),
+                'claimed'        => __('Claimed'),
+                'tickets'        => __('Tickets'),
+                'last7days'      => __('Last 7 Days'),
+                'last30days'     => __('Last 30 Days'),
+                'last90days'     => __('Last 90 Days'),
             ),
         ));
     }

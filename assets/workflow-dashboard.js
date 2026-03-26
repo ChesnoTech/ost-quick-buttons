@@ -149,27 +149,47 @@
         }
         html += '</tbody></table></div>';
 
-        // Agent leaderboard
+        // Agent leaderboard OR My Performance (access-limited)
+        var isLimited = data.accessMode === 'limited';
         html += '<div class="wd-card">';
-        html += '<h3>' + esc(t('agentLeaderboard')) + '</h3>';
-        if (data.agents && data.agents.length) {
-            data.agents.forEach(function(a, idx) {
-                var rankClass = idx < 3 ? 'wd-rank-' + (idx + 1) : 'wd-rank-n';
-                var rankLabel = idx < 3 ? ['1','2','3'][idx] : (idx + 1);
-                html += '<div class="wd-agent-row">';
-                html += '<div class="wd-agent-rank ' + rankClass + '">' + rankLabel + '</div>';
-                html += '<div class="wd-agent-name">' + esc(a.name) + '</div>';
-                html += '<div class="wd-agent-count">' + a.count + '</div>';
-                html += '</div>';
-            });
+        if (isLimited) {
+            // Access-limited: show only own stats, no leaderboard
+            html += '<h3>' + esc(t('myPerformance')) + '</h3>';
+            var myCount = 0;
+            if (data.agents && data.agents.length) {
+                // The API already filtered to assigned tickets only,
+                // so there should be only the current agent's data
+                myCount = data.agents.reduce(function(s, a) { return s + a.count; }, 0);
+            }
+            html += '<div style="text-align:center;padding:20px 0;">';
+            html += '<div style="font-size:48px;font-weight:700;color:#128DBE;">' + myCount + '</div>';
+            html += '<div style="font-size:13px;color:#888;margin-top:4px;">' + esc(t('claimed')) + '</div>';
+            if (data.staffName) {
+                html += '<div style="font-size:12px;color:#aaa;margin-top:8px;">' + esc(data.staffName) + '</div>';
+            }
+            html += '</div>';
         } else {
-            html += '<div style="color:#999;padding:20px;text-align:center;">' + esc(t('noData')) + '</div>';
+            // Full leaderboard
+            html += '<h3>' + esc(t('agentLeaderboard')) + '</h3>';
+            if (data.agents && data.agents.length) {
+                data.agents.forEach(function(a, idx) {
+                    var rankClass = idx < 3 ? 'wd-rank-' + (idx + 1) : 'wd-rank-n';
+                    var rankLabel = idx < 3 ? ['1','2','3'][idx] : (idx + 1);
+                    html += '<div class="wd-agent-row">';
+                    html += '<div class="wd-agent-rank ' + rankClass + '">' + rankLabel + '</div>';
+                    html += '<div class="wd-agent-name">' + esc(a.name) + '</div>';
+                    html += '<div class="wd-agent-count">' + a.count + '</div>';
+                    html += '</div>';
+                });
+            } else {
+                html += '<div style="color:#999;padding:20px;text-align:center;">' + esc(t('noData')) + '</div>';
+            }
         }
         html += '</div>';
 
-        // Current queue
+        // Current queue / My assigned tickets
         html += '<div class="wd-card">';
-        html += '<h3>' + esc(t('currentQueue')) + '</h3>';
+        html += '<h3>' + esc(isLimited ? t('myQueue') : t('currentQueue')) + '</h3>';
         if (data.queue && data.queue.length) {
             data.queue.forEach(function(q) {
                 html += '<div class="wd-queue-row">';
