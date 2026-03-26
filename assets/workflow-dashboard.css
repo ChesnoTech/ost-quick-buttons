@@ -1,0 +1,173 @@
+/**
+ * Workflow Dashboard — Modern KPI Design
+ */
+*, *::before, *::after { box-sizing: border-box; }
+body {
+    margin: 0; padding: 0;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-size: 14px; color: #333;
+    background: #f0f2f5; line-height: 1.5;
+}
+
+/* Header */
+.wd-header {
+    background: linear-gradient(135deg, #1a2332, #2c3e50);
+    color: #fff; padding: 24px 32px;
+    display: flex; align-items: center; justify-content: space-between;
+}
+.wd-header h1 { margin: 0; font-size: 22px; font-weight: 600; }
+.wd-header-sub { font-size: 13px; color: rgba(255,255,255,0.6); margin-top: 2px; }
+.wd-period-btns { display: flex; gap: 6px; }
+.wd-period-btn {
+    padding: 6px 16px; border: 1px solid rgba(255,255,255,0.25); border-radius: 20px;
+    background: transparent; color: rgba(255,255,255,0.7); font-size: 12px;
+    cursor: pointer; transition: all 0.15s;
+}
+.wd-period-btn:hover { background: rgba(255,255,255,0.1); color: #fff; }
+.wd-period-btn.active {
+    background: rgba(255,255,255,0.2); color: #fff;
+    border-color: rgba(255,255,255,0.5);
+}
+
+/* KPI Cards Row */
+.wd-kpis {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 16px; padding: 20px 32px 0;
+}
+.wd-kpi {
+    background: #fff; border-radius: 12px; padding: 20px 24px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+    display: flex; flex-direction: column;
+}
+.wd-kpi-label {
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.8px;
+    color: #888; margin-bottom: 6px; font-weight: 600;
+}
+.wd-kpi-value {
+    font-size: 32px; font-weight: 700; line-height: 1.1;
+    font-variant-numeric: tabular-nums;
+}
+.wd-kpi-sub { font-size: 12px; color: #999; margin-top: 4px; }
+.wd-kpi-blue .wd-kpi-value { color: #128DBE; }
+.wd-kpi-green .wd-kpi-value { color: #27ae60; }
+.wd-kpi-orange .wd-kpi-value { color: #e67e22; }
+.wd-kpi-purple .wd-kpi-value { color: #8e44ad; }
+.wd-kpi-red .wd-kpi-value { color: #e74c3c; }
+
+/* Charts Grid */
+.wd-grid {
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: 16px; padding: 16px 32px 32px;
+}
+.wd-card {
+    background: #fff; border-radius: 12px; padding: 20px 24px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+}
+.wd-card-full { grid-column: 1 / -1; }
+.wd-card h3 {
+    margin: 0 0 16px; font-size: 14px; font-weight: 600;
+    color: #555; text-transform: uppercase; letter-spacing: 0.5px;
+}
+
+/* Bar Chart */
+.wd-bar-row {
+    display: flex; align-items: center; gap: 8px;
+    margin-bottom: 4px; font-size: 12px;
+}
+.wd-bar-label { width: 45px; text-align: right; color: #888; flex-shrink: 0; }
+.wd-bar-track {
+    flex: 1; height: 22px; background: #f0f2f5; border-radius: 4px;
+    overflow: hidden;
+}
+.wd-bar-fill {
+    height: 100%; background: linear-gradient(90deg, #128DBE, #1aa3d9);
+    border-radius: 4px; transition: width 0.6s ease-out;
+    min-width: 2px;
+}
+.wd-bar-value {
+    width: 35px; text-align: right; font-weight: 600; color: #333;
+    font-variant-numeric: tabular-nums; flex-shrink: 0;
+}
+
+/* Status Table */
+.wd-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.wd-table th {
+    text-align: left; padding: 8px 12px; border-bottom: 2px solid #eee;
+    color: #888; font-weight: 600; font-size: 11px;
+    text-transform: uppercase; letter-spacing: 0.5px;
+}
+.wd-table td { padding: 10px 12px; border-bottom: 1px solid #f5f5f5; }
+.wd-table tr:hover td { background: #fafbfc; }
+.wd-table .wd-num { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
+.wd-table .wd-time { color: #128DBE; font-weight: 600; }
+
+/* Agent Leaderboard */
+.wd-agent-row {
+    display: flex; align-items: center; padding: 10px 0;
+    border-bottom: 1px solid #f5f5f5;
+}
+.wd-agent-rank {
+    width: 32px; height: 32px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px; font-weight: 700; margin-right: 12px; flex-shrink: 0;
+}
+.wd-rank-1 { background: #fef3c7; color: #d97706; }
+.wd-rank-2 { background: #e5e7eb; color: #6b7280; }
+.wd-rank-3 { background: #fed7aa; color: #c2410c; }
+.wd-rank-n { background: #f3f4f6; color: #9ca3af; }
+.wd-agent-name { flex: 1; font-weight: 500; }
+.wd-agent-count { font-size: 18px; font-weight: 700; color: #128DBE; }
+
+/* Queue Status Badges */
+.wd-queue-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 0; border-bottom: 1px solid #f5f5f5;
+}
+.wd-queue-name { font-weight: 500; }
+.wd-queue-count {
+    background: #e8f4fc; color: #128DBE; padding: 4px 12px;
+    border-radius: 12px; font-weight: 700; font-size: 13px;
+}
+
+/* Loading */
+.wd-loading {
+    text-align: center; padding: 60px; color: #999; font-size: 15px;
+}
+.wd-loading::after {
+    content: ''; display: block; width: 32px; height: 32px;
+    border: 3px solid #eee; border-top-color: #128DBE;
+    border-radius: 50%; margin: 16px auto 0;
+    animation: wd-spin 0.8s linear infinite;
+}
+@keyframes wd-spin { to { transform: rotate(360deg); } }
+
+/* Responsive */
+@media (max-width: 900px) {
+    .wd-grid { grid-template-columns: 1fr; }
+    .wd-kpis { grid-template-columns: repeat(2, 1fr); }
+    .wd-header { padding: 20px 16px; }
+    .wd-kpis, .wd-grid { padding-left: 16px; padding-right: 16px; }
+}
+@media (max-width: 480px) {
+    .wd-kpis { grid-template-columns: 1fr; }
+    .wd-kpi-value { font-size: 26px; }
+}
+
+/* Dark mode */
+@media (prefers-color-scheme: dark) {
+    body { background: #1a1a1a; color: #ddd; }
+    .wd-header { background: linear-gradient(135deg, #0d1117, #1a2332); }
+    .wd-kpi, .wd-card { background: #222; box-shadow: 0 1px 4px rgba(0,0,0,0.2); }
+    .wd-kpi-label { color: #666; }
+    .wd-kpi-sub { color: #555; }
+    .wd-card h3 { color: #888; }
+    .wd-bar-track { background: #333; }
+    .wd-bar-value { color: #ddd; }
+    .wd-bar-label { color: #666; }
+    .wd-table th { border-color: #333; color: #666; }
+    .wd-table td { border-color: #2a2a2a; }
+    .wd-table tr:hover td { background: #2a2a2a; }
+    .wd-agent-row, .wd-queue-row { border-color: #2a2a2a; }
+    .wd-queue-count { background: #1a2a3a; }
+    .wd-period-btn { border-color: rgba(255,255,255,0.15); }
+}

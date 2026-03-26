@@ -3,7 +3,7 @@
  * Quick Buttons Plugin - Main Class
  *
  * @author  ChesnoTech
- * @version 2.3.0
+ * @version 3.2.0
  */
 
 require_once 'config.php';
@@ -14,12 +14,10 @@ class QuickButtonsPlugin extends Plugin {
     static private $bootstrapped = false;
 
     function bootstrap() {
-        // bootstrap() is called per-instance. We only need one-time setup.
         if (self::$bootstrapped)
             return;
         self::$bootstrapped = true;
 
-        // Register translations (i18n/LC_MESSAGES/{locale}/quick-buttons.mo.php)
         self::registerTranslations();
 
         if (!defined('STAFFINC_DIR'))
@@ -35,11 +33,6 @@ class QuickButtonsPlugin extends Plugin {
         }
     }
 
-    /**
-     * Called when plugin is installed/active, even with 0 instances.
-     * This ensures AJAX routes and assets are available for the admin
-     * config page when creating the very first instance.
-     */
     static function bootstrapStatic() {
         if (self::$bootstrapped)
             return;
@@ -63,6 +56,7 @@ class QuickButtonsPlugin extends Plugin {
                 url_post('^execute$', 'execute'),
                 url_post('^undo$', 'undo'),
                 url_get('^dashboard$', 'dashboard'),
+                url_get('^dashboard-page$', 'serveDashboardPage'),
                 url_get('^admin-config-data$', 'getAdminConfigData'),
                 url_get('^workflow-builder$', 'serveWorkflowBuilder'),
                 url_post('^workflow-builder-save$', 'saveWorkflowBuilder'),
@@ -106,12 +100,49 @@ class QuickButtonsPlugin extends Plugin {
         $buffer = str_replace('</head>', $css . "\n" . $adminCss . "\n</head>", $buffer);
         $buffer = str_replace('</body>', $js . "\n" . $adminJs . "\n</body>", $buffer);
 
+        // Inject "Workflow" tab into the agent dashboard page
+        $buffer = self::injectDashboardTab($buffer);
+
+        return $buffer;
+    }
+
+    /**
+     * Inject a "Workflow" tab link into the built-in dashboard page.
+     * Detects the dashboard by looking for the statistics tab structure.
+     */
+    static function injectDashboardTab($buffer) {
+        // Only inject on the dashboard page (has dashboard-specific tab structure)
+        if (strpos($buffer, 'dashboard.php') === false)
+            return $buffer;
+
+        // Look for the dashboard sub-navigation to add our link
+        $dashUrl = ROOT_PATH . 'scp/ajax.php/quick-buttons/dashboard-page';
+        $linkHtml = sprintf(
+            '<li><a href="%s" class="no-pjax" target="_blank"><i class="icon-bar-chart"></i> %s</a></li>',
+            $dashUrl,
+            __('Workflow Dashboard')
+        );
+
+        // Inject into the sub-navigation (after "My Profile" link)
+        if (strpos($buffer, 'profile.php') !== false) {
+            $buffer = str_replace(
+                '<a href="profile.php"',
+                '<a href="profile.php"',
+                $buffer
+            );
+            // Add to sub_nav list - inject before closing </ul> of sub_nav
+            $buffer = preg_replace(
+                '/(<ul[^>]*id="sub_nav"[^>]*>.*?)(class="active"[^>]*>.*?<\/a><\/li>)/s',
+                '$1$2' . "\n" . $linkHtml,
+                $buffer,
+                1
+            );
+        }
+
         return $buffer;
     }
 }
 
-// Static bootstrap: ensures AJAX routes + assets load even with 0 instances.
-// The plugin class file is loaded when osTicket discovers the plugin is installed,
-// so this runs on every staff page load regardless of instance count.
+// Static bootstrap
 if (defined('STAFFINC_DIR'))
     QuickButtonsPlugin::bootstrapStatic();

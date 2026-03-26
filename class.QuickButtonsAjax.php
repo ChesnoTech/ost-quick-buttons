@@ -667,7 +667,68 @@ class QuickButtonsAjax extends AjaxController {
     }
 
     // ================================================================
-    //  Dashboard / Reports
+    //  Dashboard Page (standalone, agent-accessible)
+    // ================================================================
+
+    function serveDashboardPage() {
+        $this->requireStaff();
+
+        $data = array(
+            'apiUrl'    => ROOT_PATH . 'scp/ajax.php/quick-buttons/dashboard',
+            'csrfToken' => $this->getCsrfToken(),
+            'i18n'      => array(
+                'workflowDashboard' => __('Workflow Dashboard'),
+                'realtimeMetrics'   => __('Real-time workflow metrics'),
+                'last7'             => __('7 Days'),
+                'last30'            => __('30 Days'),
+                'last90'            => __('90 Days'),
+                'loading'           => __('Loading...'),
+                'processedToday'    => __('Processed Today'),
+                'ticketsToday'      => __('tickets today'),
+                'avgPerDay'         => __('Avg Per Day'),
+                'dayPeriod'         => __('day period'),
+                'activeAgents'      => __('Active Agents'),
+                'agentsWithActions' => __('agents with actions'),
+                'queueDepth'        => __('Queue Depth'),
+                'ticketsInPipeline' => __('tickets in pipeline'),
+                'totalProcessed'    => __('Total Processed'),
+                'days'              => __('days'),
+                'dailyThroughput'   => __('Daily Throughput'),
+                'avgTimePerStep'    => __('Average Time Per Step'),
+                'status'            => __('Status'),
+                'avgTime'           => __('Avg Time'),
+                'transitions'       => __('Transitions'),
+                'agentLeaderboard'  => __('Agent Leaderboard'),
+                'currentQueue'      => __('Current Queue'),
+                'noData'            => __('No data for this period'),
+            ),
+        );
+
+        $json = json_encode($data, JSON_UNESCAPED_UNICODE);
+        $dir = dirname(__FILE__) . '/assets/';
+        $css = file_exists($dir . 'workflow-dashboard.css') ? file_get_contents($dir . 'workflow-dashboard.css') : '';
+        $js  = file_exists($dir . 'workflow-dashboard.js') ? file_get_contents($dir . 'workflow-dashboard.js') : '';
+
+        header('Content-Type: text/html; charset=utf-8');
+        echo '<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>' . __('Workflow Dashboard') . '</title>
+<style>' . $css . '</style>
+</head>
+<body>
+<div id="wd-app"></div>
+<script>var WD_DATA = ' . $json . ';</script>
+<script>' . $js . '</script>
+</body>
+</html>';
+        exit;
+    }
+
+    // ================================================================
+    //  Dashboard API (JSON data)
     // ================================================================
 
     /**
