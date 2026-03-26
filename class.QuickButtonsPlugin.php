@@ -19,11 +19,20 @@ class QuickButtonsPlugin extends Plugin {
             return;
         self::$bootstrapped = true;
 
+        // Register translations (i18n/LC_MESSAGES/{locale}/quick-buttons.mo.php)
+        self::registerTranslations();
+
         if (!defined('STAFFINC_DIR'))
             return;
 
         Signal::connect('ajax.scp', array('QuickButtonsPlugin', 'registerAjaxRoutes'));
         ob_start(array('QuickButtonsPlugin', 'injectAssets'));
+    }
+
+    static function registerTranslations() {
+        if (method_exists('Plugin', 'translate')) {
+            list($__, $_N) = Plugin::translate('quick-buttons');
+        }
     }
 
     /**
@@ -35,6 +44,8 @@ class QuickButtonsPlugin extends Plugin {
         if (self::$bootstrapped)
             return;
         self::$bootstrapped = true;
+
+        self::registerTranslations();
 
         if (!defined('STAFFINC_DIR'))
             return;
