@@ -281,28 +281,36 @@
         if (!isPluginPage || isInstancePage) return;
         if ($('.qa-dashboard').length) return;
 
-        // Add Dashboard tab
-        var $tabList = $('ul.tabs, .tab_nav ul').first();
+        // Add Dashboard tab — works with osTicket's tab system
+        // Structure: <ul id="plugin-tabs"> + <div id="plugin-tabs_container">
+        var $tabList = $('#plugin-tabs');
+        if (!$tabList.length)
+            $tabList = $('ul.tabs, .tab_nav ul').first();
         if (!$tabList.length) return;
 
         $tabList.append('<li><a href="#dashboard">Dashboard</a></li>');
 
-        // Create dashboard container
-        var $container = $('<div id="dashboard" class="qa-dashboard" style="display:none;padding:15px;"></div>');
+        // Create dashboard container inside the tab_content parent
+        var $container = $('<div id="dashboard" class="tab_content qa-dashboard" style="display:none;padding:15px;"></div>');
         $container.html('<p style="color:#888;">Loading dashboard...</p>');
-        $tabList.closest('.tab_content, .tabber').first().append($container);
 
-        // If no tabber, append after the tab content area
-        if (!$container.parent().length) {
-            $tabList.parent().after($container);
+        // Append to the tab container (e.g., #plugin-tabs_container)
+        var $tabContainer = $('#plugin-tabs_container');
+        if ($tabContainer.length) {
+            $tabContainer.append($container);
+        } else {
+            // Fallback: after the tab list
+            $tabList.after($container);
         }
 
-        // Tab switching
+        // Tab switching — use osTicket's native tab mechanism
         $tabList.on('click', 'a[href="#dashboard"]', function(e) {
             e.preventDefault();
+            // Deactivate all tabs
             $tabList.find('li').removeClass('active');
             $(this).parent().addClass('active');
-            $tabList.siblings('div, .tab_content').hide();
+            // Hide all tab content siblings
+            $container.siblings('.tab_content').hide();
             $container.show();
             loadDashboard($container, 7);
         });
