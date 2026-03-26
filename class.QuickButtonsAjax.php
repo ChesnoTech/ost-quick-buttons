@@ -744,11 +744,9 @@ class QuickButtonsAjax extends AjaxController {
         $days = max(1, min(90, (int) ($_GET['days'] ?? 7)));
         $since = date('Y-m-d H:i:s', strtotime("-{$days} days"));
 
-        // Access control: filter by agent's accessible departments
-        $deptIds = $thisstaff->getDepts();
-        if (empty($deptIds))
-            $deptIds = array($thisstaff->getDeptId());
-        $deptIn = implode(',', array_map('intval', $deptIds));
+        // Access control: match osTicket's built-in visibility rules
+        // See Staff::getTicketsVisibility() in class.staff.php
+        $visibilityWhere = self::buildVisibilitySQL($thisstaff);
 
         // 1. Tickets processed per day — filtered by dept
         $dailyRes = db_query(
@@ -758,7 +756,7 @@ class QuickButtonsAjax extends AjaxController {
              JOIN ost_ticket tk ON th.object_id = tk.ticket_id
              WHERE e.event_id = 9 AND e.timestamp >= '{$since}'
                AND e.data LIKE '%\"status\"%'
-               AND tk.dept_id IN ({$deptIn})
+               AND ({$visibilityWhere})
              GROUP BY DATE(e.timestamp)
              ORDER BY day");
         $daily = array();
@@ -774,7 +772,7 @@ class QuickButtonsAjax extends AjaxController {
              JOIN ost_ticket tk ON th.object_id = tk.ticket_id
              WHERE e.event_id = 9 AND e.timestamp >= '{$since}'
                AND e.data LIKE '%\"status\"%'
-               AND tk.dept_id IN ({$deptIn})
+               AND ({$visibilityWhere})
              ORDER BY th.object_id, e.timestamp");
         $stepDurations = array();
         $prevByTicket = array();
@@ -819,7 +817,7 @@ class QuickButtonsAjax extends AjaxController {
              JOIN ost_ticket tk ON th.object_id = tk.ticket_id
              LEFT JOIN ost_staff s ON e.staff_id = s.staff_id
              WHERE e.event_id = 4 AND e.timestamp >= '{$since}'
-               AND tk.dept_id IN ({$deptIn})
+               AND ({$visibilityWhere})
              GROUP BY e.staff_id
              ORDER BY cnt DESC
              LIMIT 20");
@@ -837,7 +835,7 @@ class QuickButtonsAjax extends AjaxController {
              FROM ost_ticket tk
              JOIN ost_ticket_status s ON tk.status_id = s.id
              WHERE s.state = 'open'
-               AND tk.dept_id IN ({$deptIn})
+               AND ({$visibilityWhere})
              GROUP BY s.id
              ORDER BY s.sort");
         $queue = array();
@@ -872,6 +870,41 @@ class QuickButtonsAjax extends AjaxController {
                 'last90days'    => __('Last 90 Days'),
             ),
         ));
+    }
+
+    /**
+     * Build SQL WHERE clause matching osTicket's Staff::getTicketsVisibility()
+     *
+     * Replicates the ORM logic from class.staff.php in raw SQL:
+     * - If access-limited (assigned_only): only assigned tickets
+     * - Otherwise: dept-accessible tickets + assigned tickets + team tickets
+     *
+     * Expects the ticket table aliased as `tk` in the outer query.
+     */
+    private static function buildVisibilitySQL($staff) {
+        $staffId = (int) $staff->getId();
+        $conditions = array();
+
+        // Always include tickets assigned to this agent
+        $conditions[] = "tk.staff_id = {$staffId}";
+
+        // Include tickets assigned to agent's teams
+        $teams = array_filter($staff->getTeams());
+        if ($teams) {
+            $teamIn = implode(',', array_map('intval', $teams));
+            $conditions[] = "tk.team_id IN ({$teamIn})";
+        }
+
+        // If NOT access-limited, also include all tickets in accessible depts
+        if (!$staff->isAccessLimited()) {
+            $depts = $staff->getDepts();
+            if ($depts && count($depts)) {
+                $deptIn = implode(',', array_map('intval', $depts));
+                $conditions[] = "tk.dept_id IN ({$deptIn})";
+            }
+        }
+
+        return implode(' OR ', $conditions);
     }
 
     private static function formatDuration($totalSec) {
