@@ -7,6 +7,8 @@
     var D = WD_DATA;
     var T = D.i18n || {};
     var currentDays = 30;
+    var customFrom = '';
+    var customTo = '';
 
     function t(key) { return T[key] || key; }
 
@@ -17,32 +19,68 @@
         return d.innerHTML;
     }
 
+    function todayStr() {
+        return new Date().toISOString().substring(0, 10);
+    }
+
+    function daysAgoStr(n) {
+        var d = new Date();
+        d.setDate(d.getDate() - n);
+        return d.toISOString().substring(0, 10);
+    }
+
     function render() {
         var app = document.getElementById('wd-app');
 
-        // Header
+        var today = todayStr();
+        var defaultFrom = daysAgoStr(30);
+
         app.innerHTML =
             '<div class="wd-header">' +
             '<div>' +
             '<h1>' + esc(t('workflowDashboard')) + '</h1>' +
             '<div class="wd-header-sub">' + esc(t('realtimeMetrics')) + '</div>' +
             '</div>' +
+            '<div class="wd-controls">' +
             '<div class="wd-period-btns">' +
             '<button class="wd-period-btn" data-days="7">' + esc(t('last7')) + '</button>' +
             '<button class="wd-period-btn active" data-days="30">' + esc(t('last30')) + '</button>' +
             '<button class="wd-period-btn" data-days="90">' + esc(t('last90')) + '</button>' +
             '</div>' +
+            '<div class="wd-date-range">' +
+            '<input type="date" class="wd-date-input" id="wd-from" value="' + defaultFrom + '">' +
+            '<span class="wd-date-sep">\u2014</span>' +
+            '<input type="date" class="wd-date-input" id="wd-to" value="' + today + '">' +
+            '<button class="wd-date-go" id="wd-date-go">' + esc(t('apply')) + '</button>' +
+            '</div>' +
+            '</div>' +
             '</div>' +
             '<div id="wd-content"><div class="wd-loading">' + esc(t('loading')) + '</div></div>';
 
-        // Period buttons
+        // Period quick buttons
         app.querySelectorAll('.wd-period-btn').forEach(function(btn) {
             btn.addEventListener('click', function() {
                 app.querySelectorAll('.wd-period-btn').forEach(function(b) { b.classList.remove('active'); });
                 this.classList.add('active');
                 currentDays = parseInt(this.dataset.days);
+                customFrom = '';
+                customTo = '';
+                // Update date inputs to match
+                document.getElementById('wd-from').value = daysAgoStr(currentDays);
+                document.getElementById('wd-to').value = todayStr();
                 loadData();
             });
+        });
+
+        // Custom date range
+        document.getElementById('wd-date-go').addEventListener('click', function() {
+            customFrom = document.getElementById('wd-from').value;
+            customTo = document.getElementById('wd-to').value;
+            if (!customFrom || !customTo) return;
+            // Deactivate period buttons
+            app.querySelectorAll('.wd-period-btn').forEach(function(b) { b.classList.remove('active'); });
+            currentDays = 0;
+            loadData();
         });
 
         loadData();
@@ -52,8 +90,15 @@
         var content = document.getElementById('wd-content');
         content.innerHTML = '<div class="wd-loading">' + esc(t('loading')) + '</div>';
 
+        var params = '';
+        if (customFrom && customTo) {
+            params = '?from=' + encodeURIComponent(customFrom) + '&to=' + encodeURIComponent(customTo);
+        } else {
+            params = '?days=' + currentDays;
+        }
+
         var xhr = new XMLHttpRequest();
-        xhr.open('GET', D.apiUrl + '?days=' + currentDays, true);
+        xhr.open('GET', D.apiUrl + params, true);
         xhr.setRequestHeader('X-CSRFToken', D.csrfToken);
 
         xhr.onload = function() {

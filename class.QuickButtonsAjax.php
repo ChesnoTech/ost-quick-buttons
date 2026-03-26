@@ -705,6 +705,7 @@ class QuickButtonsAjax extends AjaxController {
                 'myQueue'           => __('My Assigned Tickets'),
                 'claimed'           => __('Claimed'),
                 'noData'            => __('No data for this period'),
+                'apply'             => __('Apply'),
             ),
         );
 
@@ -739,13 +740,25 @@ class QuickButtonsAjax extends AjaxController {
      * GET /quick-buttons/dashboard
      *
      * Returns workflow metrics: throughput, avg time per step, agent stats.
-     * Query params: days (default 7)
+     * Query params: days (default 30), OR from/to (YYYY-MM-DD)
      */
     function dashboard() {
         $thisstaff = $this->requireStaff();
 
-        $days = max(1, min(90, (int) ($_GET['days'] ?? 7)));
-        $since = date('Y-m-d H:i:s', strtotime("-{$days} days"));
+        // Support custom date range (from/to) or quick period (days)
+        $from = $_GET['from'] ?? '';
+        $to   = $_GET['to'] ?? '';
+
+        if ($from && $to && preg_match('/^\d{4}-\d{2}-\d{2}$/', $from)
+                         && preg_match('/^\d{4}-\d{2}-\d{2}$/', $to)) {
+            $since = db_input($from) . ' 00:00:00';
+            $until = db_input($to) . ' 23:59:59';
+            $days  = max(1, (int) ((strtotime($to) - strtotime($from)) / 86400));
+        } else {
+            $days  = max(1, min(365, (int) ($_GET['days'] ?? 30)));
+            $since = date('Y-m-d H:i:s', strtotime("-{$days} days"));
+            $until = date('Y-m-d H:i:s');
+        }
 
         // Access control: match osTicket's built-in visibility rules
         // See Staff::getTicketsVisibility() in class.staff.php
@@ -757,7 +770,7 @@ class QuickButtonsAjax extends AjaxController {
              FROM ost_thread_event e
              JOIN ost_thread th ON e.thread_id = th.id AND th.object_type = 'T'
              JOIN ost_ticket tk ON th.object_id = tk.ticket_id
-             WHERE e.event_id = 9 AND e.timestamp >= '{$since}'
+             WHERE e.event_id = 9 AND e.timestamp >= '{$since}' AND e.timestamp <= '{$until}'
                AND e.data LIKE '%\"status\"%'
                AND ({$visibilityWhere})
              GROUP BY DATE(e.timestamp)
@@ -773,7 +786,7 @@ class QuickButtonsAjax extends AjaxController {
              FROM ost_thread_event e
              JOIN ost_thread th ON e.thread_id = th.id AND th.object_type = 'T'
              JOIN ost_ticket tk ON th.object_id = tk.ticket_id
-             WHERE e.event_id = 9 AND e.timestamp >= '{$since}'
+             WHERE e.event_id = 9 AND e.timestamp >= '{$since}' AND e.timestamp <= '{$until}'
                AND e.data LIKE '%\"status\"%'
                AND ({$visibilityWhere})
              ORDER BY th.object_id, e.timestamp");
@@ -819,7 +832,7 @@ class QuickButtonsAjax extends AjaxController {
              JOIN ost_thread th ON e.thread_id = th.id AND th.object_type = 'T'
              JOIN ost_ticket tk ON th.object_id = tk.ticket_id
              LEFT JOIN ost_staff s ON e.staff_id = s.staff_id
-             WHERE e.event_id = 4 AND e.timestamp >= '{$since}'
+             WHERE e.event_id = 4 AND e.timestamp >= '{$since}' AND e.timestamp <= '{$until}'
                AND ({$visibilityWhere})
              GROUP BY e.staff_id
              ORDER BY cnt DESC

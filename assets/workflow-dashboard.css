@@ -29,6 +29,28 @@ body {
     border-color: rgba(255,255,255,0.5);
 }
 
+/* Controls row */
+.wd-controls {
+    display: flex; flex-direction: column; gap: 8px; align-items: flex-end;
+}
+.wd-date-range {
+    display: flex; align-items: center; gap: 6px;
+}
+.wd-date-input {
+    padding: 5px 10px; border: 1px solid rgba(255,255,255,0.25); border-radius: 6px;
+    background: rgba(255,255,255,0.1); color: #fff; font-size: 12px;
+    cursor: pointer;
+}
+.wd-date-input:focus { outline: none; border-color: rgba(255,255,255,0.5); }
+.wd-date-input::-webkit-calendar-picker-indicator { filter: invert(1); cursor: pointer; }
+.wd-date-sep { color: rgba(255,255,255,0.4); font-size: 12px; }
+.wd-date-go {
+    padding: 5px 14px; border: 1px solid rgba(255,255,255,0.3); border-radius: 6px;
+    background: rgba(255,255,255,0.15); color: #fff; font-size: 12px;
+    cursor: pointer; transition: all 0.15s;
+}
+.wd-date-go:hover { background: rgba(255,255,255,0.25); }
+
 /* KPI Cards Row */
 .wd-kpis {
     display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
