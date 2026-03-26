@@ -87,6 +87,158 @@ class QuickButtonsAjax extends AjaxController {
     }
 
     // ================================================================
+    //  Workflow Builder — Full-page editor
+    // ================================================================
+
+    function serveWorkflowBuilder() {
+        $this->requireStaff();
+
+        $iid = (int) ($_GET['iid'] ?? 0);
+        if (!$iid)
+            Http::response(400, __('Instance ID required'));
+
+        $plugin = self::findPlugin();
+        if (!$plugin)
+            Http::response(404, __('Plugin not found'));
+
+        // Find the instance
+        $instance = PluginInstance::lookup($iid);
+        if (!$instance || $instance->plugin_id != $plugin->getId())
+            Http::response(404, __('Instance not found'));
+
+        $config = $instance->getConfig();
+
+        // Load departments
+        $departments = array();
+        foreach (Dept::getDepartments() as $id => $name)
+            $departments[] = array('id' => (string) $id, 'name' => $name);
+
+        // Load statuses
+        $statuses = array();
+        if ($items = TicketStatusList::getStatuses(array('enabled' => true))) {
+            foreach ($items as $s) {
+                $state = $s->getState();
+                $statuses[] = array(
+                    'id'    => (string) $s->getId(),
+                    'name'  => $s->getName(),
+                    'state' => $state ? ucfirst($state) : __('Custom'),
+                );
+            }
+        }
+
+        // Current widget config
+        $widgetConfig = self::parseWidgetConfig($config);
+
+        // Topic name for header
+        $topicId = self::choiceKey($config->get('topic_id'));
+        $topicName = '';
+        if ($topicId) {
+            $topic = Topic::lookup($topicId);
+            if ($topic) $topicName = $topic->getFullName();
+        }
+
+        $data = array(
+            'instanceId'   => $iid,
+            'instanceName' => $instance->getName(),
+            'topicName'    => $topicName,
+            'departments'  => $departments,
+            'statuses'     => $statuses,
+            'config'       => $widgetConfig,
+            'csrfToken'    => $this->getCsrfToken(),
+            'saveUrl'      => ROOT_PATH . 'scp/ajax.php/quick-buttons/workflow-builder-save?iid=' . $iid,
+            'backUrl'      => ROOT_PATH . 'scp/plugins.php?id=' . $plugin->getId() . '&xid=' . $iid . '#config',
+        );
+
+        // Serve HTML page
+        header('Content-Type: text/html; charset=utf-8');
+        $this->renderWorkflowBuilderHtml($data);
+        exit;
+    }
+
+    function saveWorkflowBuilder() {
+        $this->requireStaff();
+
+        $iid = (int) ($_GET['iid'] ?? 0);
+        if (!$iid)
+            return $this->json_encode(array('error' => __('Instance ID required')));
+
+        $plugin = self::findPlugin();
+        if (!$plugin)
+            return $this->json_encode(array('error' => __('Plugin not found')));
+
+        $instance = PluginInstance::lookup($iid);
+        if (!$instance || $instance->plugin_id != $plugin->getId())
+            return $this->json_encode(array('error' => __('Instance not found')));
+
+        $json = $_POST['widget_config'] ?? '';
+        $data = @json_decode($json, true);
+        if (!is_array($data))
+            return $this->json_encode(array('error' => __('Invalid JSON')));
+
+        // Validate via config class
+        $config = $instance->getConfig();
+        $errors = array();
+        $testConfig = array(
+            'topic_id'      => $config->get('topic_id'),
+            'widget_config' => $json,
+        );
+
+        $configObj = new QuickButtonsConfig($instance);
+        if (!$configObj->pre_save($testConfig, $errors))
+            return $this->json_encode(array('error' => $errors['err'] ?? __('Validation failed')));
+
+        // Save directly to DB
+        $ns = 'plugin.' . $plugin->getId() . '.instance.' . $iid;
+        db_query(sprintf(
+            "INSERT INTO %s (namespace, `key`, value, updated) VALUES ('%s', 'widget_config', '%s', NOW())
+             ON DUPLICATE KEY UPDATE value=VALUES(value), updated=NOW()",
+            CONFIG_TABLE,
+            db_input($ns),
+            db_input($json)
+        ));
+
+        return $this->json_encode(array('success' => true, 'message' => __('Configuration saved')));
+    }
+
+    private function getCsrfToken() {
+        return csrf_token();
+    }
+
+    private function renderWorkflowBuilderHtml($data) {
+        $json = json_encode($data, JSON_UNESCAPED_UNICODE);
+        $assetBase = ROOT_PATH . 'scp/ajax.php/quick-buttons/assets';
+        $dir = dirname(__FILE__) . '/assets/';
+        $v = @filemtime($dir . 'quick-buttons-admin.css') ?: time();
+
+        echo '<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Workflow Builder — ' . htmlspecialchars($data['instanceName']) . '</title>
+<link rel="stylesheet" href="' . $assetBase . '/admin-css?v=' . $v . '">
+<style>' . $this->getWorkflowBuilderCss() . '</style>
+</head>
+<body>
+<div id="wb-app"></div>
+<script>var WB_DATA = ' . $json . ';</script>
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script>' . $this->getWorkflowBuilderJs() . '</script>
+</body>
+</html>';
+    }
+
+    private function getWorkflowBuilderCss() {
+        $file = dirname(__FILE__) . '/assets/workflow-builder.css';
+        return file_exists($file) ? file_get_contents($file) : '';
+    }
+
+    private function getWorkflowBuilderJs() {
+        $file = dirname(__FILE__) . '/assets/workflow-builder.js';
+        return file_exists($file) ? file_get_contents($file) : 'console.error("workflow-builder.js not found");';
+    }
+
+    // ================================================================
     //  API: Get Widgets (with permissions)
     // ================================================================
 

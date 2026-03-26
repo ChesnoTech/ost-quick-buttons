@@ -181,6 +181,24 @@
 
         $container.append($table);
 
+        // Add "Open Workflow Builder" button
+        var instanceId = getInstanceId();
+        if (instanceId) {
+            var $builderBtn = $(
+                '<div class="qa-builder-launcher" style="margin:15px 0;">' +
+                '<a href="ajax.php/quick-buttons/workflow-builder?iid=' + instanceId + '" ' +
+                'target="_blank" class="action-button" ' +
+                'style="display:inline-block;padding:10px 24px;background:#128DBE;color:#fff;' +
+                'border-radius:6px;text-decoration:none;font-size:14px;font-weight:500;">' +
+                '\u2699 Open Workflow Builder' +
+                '</a>' +
+                '<span style="margin-left:12px;color:#888;font-size:12px;">' +
+                'Visual editor for department configurations' +
+                '</span></div>'
+            );
+            $formRow.before($builderBtn);
+        }
+
         // Insert the matrix after the form row and hide the original field
         $formRow.hide();
         $formRow.after($container);
@@ -230,6 +248,12 @@
 
         var json = JSON.stringify({ departments: departments });
         $textarea.val(json);
+    }
+
+    function getInstanceId() {
+        // Extract instance ID from URL: plugins.php?id=X&xid=Y
+        var match = window.location.search.match(/[?&]xid=(\d+)/);
+        return match ? match[1] : null;
     }
 
     function escapeHtml(str) {
