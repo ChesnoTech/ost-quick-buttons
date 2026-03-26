@@ -17,7 +17,7 @@
                 countdownStop: 'Change status, release agent and transfer',
                 executingIn: 'Executing in %ss...',
                 undo: 'Undo', bulkStart: 'Start Selected', bulkStop: 'Complete Selected',
-                elapsed: 'elapsed' },
+                elapsed: 'elapsed', waiting: 'waiting' },
         perms: { canAssign: true, canTransfer: true, canRelease: true, canManage: true },
         executing: {},
         timerInterval: null,
@@ -145,11 +145,16 @@
                     .css('background-color', color)
                     .html(QA.renderIcon(icon));
 
-                // Live timer badge
+                // Live timer — show as badge above button + tooltip
+                // Stop = "working time" (green), Start = "waiting time" (orange)
                 var info = QA.tickets[ticketId];
-                if (info && info.updated && resolved.action === 'stop') {
-                    var $timer = $('<span class="qa-timer" data-since="' + info.updated + '" data-server="' + (info.serverNow || '') + '"></span>');
-                    $link.append($timer);
+                if (info && info.updated) {
+                    var timerClass = resolved.action === 'stop'
+                        ? 'qa-timer-badge qa-timer-working'
+                        : 'qa-timer-badge qa-timer-waiting';
+                    var $timer = $('<span class="' + timerClass + '" data-since="' + info.updated + '" data-server="' + (info.serverNow || '') + '"></span>');
+                    $link.data('timer-el', $timer);
+                    $link.attr('data-timer', '1');
                 }
 
                 if (isMobile) {
@@ -157,7 +162,11 @@
                     $row.addClass('has-qa-inline').prepend($actions);
                 } else {
                     var $td = $('<td class="qa-actions-cell"></td>');
-                    var $actions = $('<div class="qa-row-actions"></div>').append($link);
+                    var $actions = $('<div class="qa-row-actions"></div>');
+                    // Add timer badge above button if present
+                    var $timerEl = $link.data('timer-el');
+                    if ($timerEl) $actions.append($timerEl);
+                    $actions.append($link);
                     $td.append($actions);
                     $row.addClass('has-qa-inline').append($td);
                 }
@@ -184,7 +193,7 @@
         },
 
         updateTimers: function() {
-            $('.qa-timer').each(function() {
+            $('.qa-timer-badge').each(function() {
                 var $el = $(this);
                 var since = $el.data('since');
                 var serverNow = $el.data('server');
@@ -200,7 +209,12 @@
                 }
 
                 var diffSec = Math.max(0, Math.floor((nowMs - serverMs) / 1000));
-                $el.text(QA.formatDuration(diffSec));
+                var formatted = QA.formatDuration(diffSec);
+                $el.text(formatted);
+                // Update tooltip — "waiting" for Start, "elapsed" for Done
+                var isWaiting = $el.hasClass('qa-timer-waiting');
+                var suffix = isWaiting ? (QA.i18n.waiting || 'waiting') : (QA.i18n.elapsed || 'elapsed');
+                $el.siblings('.qa-inline-btn').attr('title', formatted + ' ' + suffix);
             });
         },
 
