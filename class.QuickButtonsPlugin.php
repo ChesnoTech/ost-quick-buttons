@@ -100,45 +100,6 @@ class QuickButtonsPlugin extends Plugin {
         $buffer = str_replace('</head>', $css . "\n" . $adminCss . "\n</head>", $buffer);
         $buffer = str_replace('</body>', $js . "\n" . $adminJs . "\n</body>", $buffer);
 
-        // Inject "Workflow" tab into the agent dashboard page
-        $buffer = self::injectDashboardTab($buffer);
-
-        return $buffer;
-    }
-
-    /**
-     * Inject a "Workflow" tab link into the built-in dashboard page.
-     * Detects the dashboard by looking for the statistics tab structure.
-     */
-    static function injectDashboardTab($buffer) {
-        // Only inject on the dashboard page (has dashboard-specific tab structure)
-        if (strpos($buffer, 'dashboard.php') === false)
-            return $buffer;
-
-        // Look for the dashboard sub-navigation to add our link
-        $dashUrl = ROOT_PATH . 'scp/ajax.php/quick-buttons/dashboard-page';
-        $linkHtml = sprintf(
-            '<li><a href="%s" class="no-pjax" target="_blank"><i class="icon-bar-chart"></i> %s</a></li>',
-            $dashUrl,
-            __('Workflow Dashboard')
-        );
-
-        // Inject into the sub-navigation (after "My Profile" link)
-        if (strpos($buffer, 'profile.php') !== false) {
-            $buffer = str_replace(
-                '<a href="profile.php"',
-                '<a href="profile.php"',
-                $buffer
-            );
-            // Add to sub_nav list - inject before closing </ul> of sub_nav
-            $buffer = preg_replace(
-                '/(<ul[^>]*id="sub_nav"[^>]*>.*?)(class="active"[^>]*>.*?<\/a><\/li>)/s',
-                '$1$2' . "\n" . $linkHtml,
-                $buffer,
-                1
-            );
-        }
-
         return $buffer;
     }
 }

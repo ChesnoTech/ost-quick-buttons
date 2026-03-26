@@ -550,7 +550,71 @@
         bulkStop:  function() { QA.handleBulkAction('stop'); }
     };
 
-    $(function() { QA.init(); });
-    $(document).on('pjax:end', '#pjax-container', function() { QA.init(); });
+    // ================================================================
+    //  Dashboard tab injection on statistics page
+    // ================================================================
+
+    function initDashboardTab() {
+        // Detect the statistics/dashboard page by looking for its tab structure
+        // osTicket stats page has tabs like "Department", "Topics", "Agent"
+        var $tabList = $('ul.clean.tabs').filter(function() {
+            return $(this).find('a[href="#department"], a[href="#topic"]').length > 0;
+        }).first();
+        if (!$tabList.length) return;
+        if ($tabList.find('a[href="#qa-workflow"]').length) return; // already added
+
+        // Add our tab
+        $tabList.append(
+            '<li><a href="#qa-workflow"><i class="icon-bar-chart"></i> Workflow</a></li>'
+        );
+
+        // Create content container as sibling of existing tab_content divs
+        var $container = $('<div id="qa-workflow" class="tab_content" style="display:none;"></div>');
+        $tabList.siblings('.tab_content').last().after($container);
+        // Fallback: if no siblings found, try parent
+        if (!$container.parent().length) {
+            $tabList.parent().append($container);
+        }
+
+        // Handle tab click
+        $tabList.on('click', 'a[href="#qa-workflow"]', function(e) {
+            e.preventDefault();
+            // Deactivate all tabs
+            $tabList.find('li').removeClass('active');
+            $(this).parent().addClass('active');
+            // Hide all tab content, show ours
+            $tabList.siblings('.tab_content').hide();
+            $container.show();
+            loadWorkflowDashboard($container);
+        });
+    }
+
+    function loadWorkflowDashboard($container) {
+        if ($container.data('loaded')) return;
+        $container.html(
+            '<div style="text-align:center;padding:40px;color:#888;">' +
+            '<div style="font-size:15px;">Loading Workflow Dashboard...</div>' +
+            '</div>'
+        );
+
+        // Load via iframe for full standalone dashboard experience
+        var url = 'ajax.php/quick-buttons/dashboard-page';
+        $container.html(
+            '<iframe src="' + url + '" ' +
+            'style="width:100%;border:none;min-height:800px;border-radius:8px;" ' +
+            'onload="this.style.height=this.contentWindow.document.body.scrollHeight+40+\'px\'">' +
+            '</iframe>'
+        );
+        $container.data('loaded', true);
+    }
+
+    $(function() {
+        QA.init();
+        initDashboardTab();
+    });
+    $(document).on('pjax:end', '#pjax-container', function() {
+        QA.init();
+        initDashboardTab();
+    });
 
 })(jQuery);
