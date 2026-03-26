@@ -1,0 +1,552 @@
+/**
+ * Workflow Builder — Admin UI v3.0
+ * Card-based department configuration with status flow diagrams
+ */
+
+/* Reset & base */
+*, *::before, *::after { box-sizing: border-box; }
+body {
+    margin: 0; padding: 0;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+    font-size: 14px;
+    color: #333;
+    background: #f0f2f5;
+    line-height: 1.5;
+}
+
+/* ================================================================
+   Header
+   ================================================================ */
+.wb-header {
+    background: linear-gradient(135deg, #1a2332, #2c3e50);
+    color: #fff;
+    padding: 20px 30px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+}
+
+.wb-header-left h1 {
+    margin: 0;
+    font-size: 20px;
+    font-weight: 600;
+    letter-spacing: -0.3px;
+}
+
+.wb-header-left .wb-subtitle {
+    margin: 2px 0 0;
+    font-size: 13px;
+    color: rgba(255,255,255,0.65);
+}
+
+.wb-header-actions {
+    display: flex;
+    gap: 10px;
+}
+
+.wb-btn {
+    padding: 8px 20px;
+    border: none;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.wb-btn-save {
+    background: #128DBE;
+    color: #fff;
+}
+.wb-btn-save:hover { background: #0e7aab; }
+.wb-btn-save:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.wb-btn-cancel {
+    background: rgba(255,255,255,0.15);
+    color: #fff;
+    border: 1px solid rgba(255,255,255,0.3);
+}
+.wb-btn-cancel:hover { background: rgba(255,255,255,0.25); }
+
+/* ================================================================
+   Toolbar
+   ================================================================ */
+.wb-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 16px 30px;
+    background: #fff;
+    border-bottom: 1px solid #e0e0e0;
+    flex-wrap: wrap;
+}
+
+.wb-search {
+    flex: 1;
+    min-width: 200px;
+    max-width: 350px;
+    padding: 8px 14px 8px 36px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    font-size: 13px;
+    background: #f8f9fa url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="%23999" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>') 10px center no-repeat;
+    transition: border-color 0.15s;
+}
+.wb-search:focus {
+    outline: none;
+    border-color: #128DBE;
+    background-color: #fff;
+}
+
+.wb-toolbar-btn {
+    padding: 6px 14px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    background: #fff;
+    color: #555;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+}
+.wb-toolbar-btn:hover {
+    background: #f0f7fc;
+    border-color: #128DBE;
+    color: #128DBE;
+}
+
+.wb-badge {
+    display: inline-block;
+    background: #128DBE;
+    color: #fff;
+    font-size: 11px;
+    padding: 1px 8px;
+    border-radius: 10px;
+    margin-left: 8px;
+}
+
+/* ================================================================
+   Cards container
+   ================================================================ */
+.wb-cards {
+    padding: 20px 30px 80px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+/* ================================================================
+   Department Card
+   ================================================================ */
+.wb-card {
+    background: #fff;
+    border-radius: 10px;
+    border: 1px solid #e0e0e0;
+    overflow: hidden;
+    transition: all 0.25s ease;
+}
+
+.wb-card.wb-card-enabled {
+    border-color: #128DBE;
+    box-shadow: 0 1px 6px rgba(18,141,190,0.1);
+}
+
+.wb-card.wb-card-hidden {
+    display: none;
+}
+
+/* Card header */
+.wb-card-header {
+    display: flex;
+    align-items: center;
+    padding: 14px 20px;
+    cursor: pointer;
+    user-select: none;
+}
+
+.wb-card-header:hover {
+    background: #f8f9fa;
+}
+
+.wb-card-dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    background: #ccc;
+    margin-right: 12px;
+    flex-shrink: 0;
+    transition: background 0.2s;
+}
+
+.wb-card-enabled .wb-card-dot {
+    background: #128DBE;
+}
+
+.wb-card-name {
+    flex: 1;
+    font-size: 14px;
+    font-weight: 600;
+    color: #333;
+}
+
+.wb-card:not(.wb-card-enabled) .wb-card-name {
+    color: #999;
+}
+
+/* Toggle switch */
+.wb-toggle {
+    position: relative;
+    width: 44px; height: 24px;
+    flex-shrink: 0;
+}
+
+.wb-toggle input {
+    opacity: 0;
+    width: 0; height: 0;
+    position: absolute;
+}
+
+.wb-toggle-track {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: #ccc;
+    border-radius: 12px;
+    transition: background 0.25s;
+    cursor: pointer;
+}
+
+.wb-toggle input:checked + .wb-toggle-track {
+    background: #128DBE;
+}
+
+.wb-toggle-track::after {
+    content: '';
+    position: absolute;
+    top: 2px; left: 2px;
+    width: 20px; height: 20px;
+    border-radius: 50%;
+    background: #fff;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+    transition: transform 0.25s;
+}
+
+.wb-toggle input:checked + .wb-toggle-track::after {
+    transform: translateX(20px);
+}
+
+/* Card body */
+.wb-card-body {
+    padding: 0 20px 18px;
+    display: none;
+}
+
+.wb-card-enabled .wb-card-body {
+    display: block;
+    animation: wb-slideDown 0.25s ease-out;
+}
+
+@keyframes wb-slideDown {
+    from { opacity: 0; max-height: 0; }
+    to   { opacity: 1; max-height: 300px; }
+}
+
+/* ================================================================
+   Status Flow Diagram
+   ================================================================ */
+.wb-flow {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    margin: 12px 0;
+    flex-wrap: wrap;
+}
+
+.wb-flow-pill {
+    position: relative;
+    border-radius: 8px;
+    padding: 2px;
+    min-width: 140px;
+}
+
+.wb-flow-pill select {
+    width: 100%;
+    padding: 8px 12px;
+    border: 2px solid transparent;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 500;
+    appearance: none;
+    -webkit-appearance: none;
+    background-repeat: no-repeat;
+    background-position: right 8px center;
+    background-size: 12px;
+    cursor: pointer;
+    transition: all 0.15s;
+    background-image: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="%23666"><path d="M7 10l5 5 5-5z"/></svg>');
+}
+
+/* Trigger = blue */
+.wb-pill-trigger select {
+    background-color: #e8f4fc;
+    border-color: #b3d9f2;
+    color: #0d6eaa;
+}
+.wb-pill-trigger select:focus {
+    border-color: #128DBE;
+    box-shadow: 0 0 0 3px rgba(18,141,190,0.15);
+    outline: none;
+}
+
+/* Working = orange */
+.wb-pill-working select {
+    background-color: #fef3e2;
+    border-color: #f5d89e;
+    color: #b87a00;
+}
+.wb-pill-working select:focus {
+    border-color: #e6a817;
+    box-shadow: 0 0 0 3px rgba(230,168,23,0.15);
+    outline: none;
+}
+
+/* Done = green */
+.wb-pill-done select {
+    background-color: #e7f8ee;
+    border-color: #a3e4b8;
+    color: #1a7a3a;
+}
+.wb-pill-done select:focus {
+    border-color: #27ae60;
+    box-shadow: 0 0 0 3px rgba(39,174,96,0.15);
+    outline: none;
+}
+
+/* Arrow between pills */
+.wb-flow-arrow {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    flex-shrink: 0;
+    color: #aaa;
+    font-size: 16px;
+    font-weight: 700;
+}
+
+.wb-flow-arrow-start { color: #128DBE; }
+.wb-flow-arrow-stop  { color: #27ae60; }
+
+/* Pill labels */
+.wb-flow-label {
+    display: block;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #999;
+    margin-bottom: 2px;
+    padding-left: 4px;
+}
+
+/* ================================================================
+   Transfer row
+   ================================================================ */
+.wb-transfer {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid #f0f0f0;
+    flex-wrap: wrap;
+}
+
+.wb-transfer-label {
+    font-size: 12px;
+    color: #666;
+    white-space: nowrap;
+}
+
+.wb-transfer select {
+    padding: 6px 10px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    font-size: 12px;
+    min-width: 180px;
+    cursor: pointer;
+}
+.wb-transfer select:focus {
+    border-color: #128DBE;
+    outline: none;
+}
+
+.wb-transfer-check {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: #666;
+}
+
+.wb-transfer-check input[type="checkbox"] {
+    cursor: pointer;
+}
+
+/* ================================================================
+   Card actions (clone, template)
+   ================================================================ */
+.wb-card-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid #f0f0f0;
+}
+
+.wb-card-action-btn {
+    padding: 4px 10px;
+    border: 1px solid #e0e0e0;
+    border-radius: 4px;
+    background: #fafafa;
+    color: #777;
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+.wb-card-action-btn:hover {
+    background: #f0f7fc;
+    border-color: #128DBE;
+    color: #128DBE;
+}
+
+/* ================================================================
+   Validation
+   ================================================================ */
+.wb-invalid select {
+    border-color: #e74c3c !important;
+    box-shadow: 0 0 0 2px rgba(231,76,60,0.15) !important;
+}
+
+.wb-warning {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: #e67e22;
+    margin-top: 6px;
+}
+
+.wb-warning::before {
+    content: '⚠';
+    font-size: 14px;
+}
+
+/* ================================================================
+   Toast / Status bar
+   ================================================================ */
+.wb-toast {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #333;
+    color: #fff;
+    padding: 10px 24px;
+    border-radius: 8px;
+    font-size: 13px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    z-index: 10000;
+    animation: wb-toastIn 0.3s ease-out;
+}
+
+.wb-toast-success { background: #27ae60; }
+.wb-toast-error { background: #e74c3c; }
+
+@keyframes wb-toastIn {
+    from { opacity: 0; transform: translateX(-50%) translateY(10px); }
+    to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+/* ================================================================
+   Sticky footer
+   ================================================================ */
+.wb-footer {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    background: #fff;
+    border-top: 1px solid #e0e0e0;
+    padding: 12px 30px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    box-shadow: 0 -2px 8px rgba(0,0,0,0.05);
+    z-index: 100;
+}
+
+.wb-footer-info {
+    font-size: 12px;
+    color: #999;
+}
+
+.wb-footer-actions {
+    display: flex;
+    gap: 10px;
+}
+
+/* ================================================================
+   Responsive
+   ================================================================ */
+@media (max-width: 768px) {
+    .wb-header { padding: 16px 16px; }
+    .wb-header h1 { font-size: 16px; }
+    .wb-toolbar { padding: 12px 16px; }
+    .wb-cards { padding: 12px 16px 80px; }
+    .wb-card-header { padding: 12px 14px; }
+    .wb-card-body { padding: 0 14px 14px; }
+
+    .wb-flow {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .wb-flow-arrow {
+        transform: rotate(90deg);
+        width: auto;
+        height: 30px;
+    }
+
+    .wb-flow-pill {
+        min-width: auto;
+    }
+
+    .wb-transfer {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+}
+
+/* ================================================================
+   Dark mode
+   ================================================================ */
+@media (prefers-color-scheme: dark) {
+    body { background: #1a1a1a; color: #ddd; }
+    .wb-header { background: linear-gradient(135deg, #0d1117, #1a2332); }
+    .wb-toolbar { background: #222; border-color: #333; }
+    .wb-search { background-color: #2a2a2a; border-color: #444; color: #ddd; }
+    .wb-toolbar-btn { background: #2a2a2a; border-color: #444; color: #aaa; }
+    .wb-card { background: #222; border-color: #333; }
+    .wb-card-header:hover { background: #2a2a2a; }
+    .wb-card-name { color: #ddd; }
+    .wb-card:not(.wb-card-enabled) .wb-card-name { color: #666; }
+    .wb-pill-trigger select { background-color: #1a2a3a; border-color: #2a5a8a; color: #7ab8e0; }
+    .wb-pill-working select { background-color: #3a2a10; border-color: #8a6a20; color: #d4a820; }
+    .wb-pill-done select { background-color: #1a3a2a; border-color: #2a7a4a; color: #5ac87a; }
+    .wb-transfer select { background: #2a2a2a; border-color: #444; color: #ddd; }
+    .wb-transfer-label { color: #888; }
+    .wb-transfer-check { color: #888; }
+    .wb-card-actions { border-color: #333; }
+    .wb-card-action-btn { background: #2a2a2a; border-color: #444; color: #888; }
+    .wb-footer { background: #222; border-color: #333; }
+    .wb-footer-info { color: #666; }
+    .wb-flow-label { color: #666; }
+    .wb-transfer { border-color: #333; }
+}
