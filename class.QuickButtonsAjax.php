@@ -423,6 +423,7 @@ class QuickButtonsAjax extends AjaxController {
             'bulkStart'    => __('Start Selected'),
             'bulkStop'     => __('Complete Selected'),
             'elapsed'      => __('elapsed'),
+            'waiting'      => __('waiting'),
         );
     }
 

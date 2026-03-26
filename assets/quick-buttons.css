@@ -35,8 +35,9 @@ th.qa-actions-header {
 /* Actions container inside the sticky cell */
 .qa-row-actions {
     display: flex;
+    flex-direction: column;
     align-items: center;
-    gap: 5px;
+    gap: 1px;
 }
 
 /* Each inline button — min-height allows timer text below icon */
@@ -168,15 +169,29 @@ th.qa-actions-header {
    LIVE TIMER BADGE
    ====================================================== */
 
-.qa-timer {
+/* Timer badge — sits above the button in the actions cell */
+.qa-timer-badge {
     display: block;
     font-size: 9px;
     line-height: 1;
-    margin-top: 1px;
-    opacity: 0.9;
-    font-family: monospace;
-    letter-spacing: -0.5px;
+    padding: 2px 0;
+    text-align: center;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 42px;
 }
+
+/* Green for working time (on Done/Stop button) */
+.qa-timer-working { color: #27ae60; }
+.dark-mode .qa-timer-working { color: #2ecc71; }
+
+/* Orange for waiting time (on Start button) */
+.qa-timer-waiting { color: #e67e22; }
+.dark-mode .qa-timer-waiting { color: #f39c12; }
 
 /* ======================================================
    UNDO BAR
