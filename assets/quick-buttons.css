@@ -60,6 +60,16 @@ th.qa-actions-header {
     overflow: hidden;
 }
 
+/* Label text overflow protection */
+.qa-inline-btn .qa-btn-label {
+    max-width: 80px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 11px;
+    line-height: 1;
+}
+
 .qa-inline-btn:hover {
     opacity: 0.85;
     transform: scale(1.1);

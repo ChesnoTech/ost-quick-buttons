@@ -549,4 +549,106 @@ body {
     .wb-footer-info { color: #666; }
     .wb-flow-label { color: #666; }
     .wb-transfer { border-color: #333; }
+    .wb-variant-row { background: #2a2a2a; border-color: #333; }
+    .wb-sel-variant { background: #333; border-color: #444; color: #ddd; }
+    .wb-flow-step-label { color: #666; }
+    .wb-labels-row { border-color: #333; }
+    .wb-label-input { background: #2a2a2a; border-color: #444; color: #ddd; }
+    .wb-pill-step2-trigger select { background-color: #3a2a10; border-color: #b87820; color: #e8a030; }
+    .wb-pill-step2-working select { background-color: #3a2a10; border-color: #8a6a20; color: #d4a820; }
+    .wb-pill-final-done select { background-color: #1a3a2a; border-color: #2a7a4a; color: #5ac87a; }
+}
+
+/* ================================================================
+   Variant selector & two-step flow
+   ================================================================ */
+
+.wb-variant-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 16px;
+    background: #f8f9fa;
+    border-bottom: 1px solid #eee;
+    font-size: 13px;
+}
+
+.wb-variant-label {
+    font-weight: 600;
+    color: #666;
+}
+
+.wb-sel-variant {
+    padding: 4px 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 12px;
+    background: #fff;
+}
+
+.wb-flow-section {
+    margin-bottom: 4px;
+}
+
+.wb-flow-step-label {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: #999;
+    padding: 8px 16px 2px;
+}
+
+.wb-labels-row {
+    display: flex;
+    gap: 8px;
+    padding: 4px 16px 8px;
+    border-bottom: 1px solid #f0f0f0;
+}
+
+.wb-label-input {
+    width: 90px;
+    padding: 3px 6px;
+    border: 1px solid #ddd;
+    border-radius: 3px;
+    font-size: 11px;
+    color: #666;
+}
+
+.wb-label-input::placeholder {
+    color: #bbb;
+    font-style: italic;
+}
+
+/* Step 2 pill colors */
+.wb-pill-step2-trigger {
+    border-bottom: 3px solid #e67e22;
+}
+.wb-pill-step2-trigger select {
+    background-color: #fdf2e9;
+    border-color: #e67e22;
+    color: #a85c14;
+}
+
+.wb-pill-step2-working {
+    border-bottom: 3px solid #d4a820;
+}
+
+.wb-pill-final-done {
+    border-bottom: 3px solid #27ae60;
+}
+.wb-pill-final-done select {
+    background-color: #eafaf1;
+    border-color: #27ae60;
+    color: #1a7a42;
+}
+
+/* Partial arrow (orange) */
+.wb-flow-arrow-partial {
+    color: #e67e22;
+}
+
+/* Start2 arrow */
+.wb-flow-arrow-start2 {
+    color: #2980b9;
 }
