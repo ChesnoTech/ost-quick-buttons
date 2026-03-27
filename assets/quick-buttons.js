@@ -574,7 +574,9 @@
                 remaining--;
                 if (remaining <= 0) {
                     clearInterval(intervalId);
+                    $(document).off('mousedown.qa-countdown');
                     if (!cancelled) {
+                        cancelled = true;
                         $popup.remove();
                         onExecute();
                     }
@@ -583,29 +585,31 @@
                 }
             }, 1000);
 
-            // Cancel handler — shared cleanup
-            var doCancel = function() {
-                if (cancelled) return;
+            // Shared cleanup
+            var cleanup = function() {
                 cancelled = true;
                 clearInterval(intervalId);
-                $(document).off('click.qa-countdown');
+                $(document).off('mousedown.qa-countdown');
                 $popup.addClass('qa-cd-cancelled');
                 setTimeout(function() { $popup.remove(); }, 250);
             };
 
             // Cancel button
             $cancelBtn.on('click', function(e) {
+                e.preventDefault();
                 e.stopPropagation();
-                doCancel();
+                if (!cancelled) cleanup();
             });
 
-            // Click outside to cancel
+            // Click outside to cancel — use mousedown (not click) with 300ms delay
+            // to avoid capturing the original button click that spawned this popup
             setTimeout(function() {
-                $(document).on('click.qa-countdown', function(e) {
-                    if (!$(e.target).closest('.qa-countdown-popup').length)
-                        doCancel();
+                $(document).one('mousedown.qa-countdown', function(e) {
+                    if (!cancelled && !$(e.target).closest('.qa-countdown-popup').length) {
+                        cleanup();
+                    }
                 });
-            }, 100);
+            }, 300);
         }
     };
 
