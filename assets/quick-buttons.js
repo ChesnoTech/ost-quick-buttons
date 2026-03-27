@@ -2,7 +2,7 @@
  * Quick Buttons Plugin - Frontend v2.3
  *
  * @author  ChesnoTech
- * @version 2.3.0
+ * @version 4.0.0
  */
 (function($) {
     'use strict';
@@ -13,9 +13,14 @@
         i18n: { start: 'Start', done: 'Done', error: 'Error', confirm: 'Confirm',
                 cancel: 'Cancel', confirmStart: 'Start working on ticket #%s?',
                 confirmStop: 'Complete and hand off ticket #%s?',
+                confirmPartial: 'Mark ticket #%s as partially ready?',
+                confirmStart2: 'Start step 2 on ticket #%s?',
                 countdownStart: 'Claim ticket and change status to working',
                 countdownStop: 'Change status, release agent and transfer',
+                countdownPartial: 'Release agent and mark partially ready',
+                countdownStart2: 'Claim ticket for step 2',
                 executingIn: 'Executing in %ss...',
+                partialReady: 'Next', startStep2: 'Start Step 2',
                 undo: 'Undo', bulkStart: 'Start Selected', bulkStop: 'Complete Selected',
                 elapsed: 'elapsed', waiting: 'waiting' },
         perms: { canAssign: true, canTransfer: true, canRelease: true, canManage: true },
@@ -24,6 +29,10 @@
 
         START_ICON: 'icon-play',
         START_COLOR: '#128DBE',
+        PARTIAL_ICON: 'icon-check',
+        PARTIAL_COLOR: '#e67e22',
+        START2_ICON: 'icon-play',
+        START2_COLOR: '#2980b9',
         STOP_ICON: 'icon-check+icon-share',
         STOP_COLOR: '#27ae60',
 
@@ -82,22 +91,34 @@
                 if (!deptCfg) continue;
 
                 var action = null;
+                var variant = deptCfg.variant || 'single';
+
                 if (deptCfg.start_trigger && ticketStatus === String(deptCfg.start_trigger))
                     action = 'start';
                 else if (deptCfg.start_target && ticketStatus === String(deptCfg.start_target))
+                    action = (variant === 'twostep') ? 'partial' : 'stop';
+                else if (variant === 'twostep' && deptCfg.step2_trigger && ticketStatus === String(deptCfg.step2_trigger))
+                    action = 'start2';
+                else if (variant === 'twostep' && deptCfg.step2_target && ticketStatus === String(deptCfg.step2_target))
                     action = 'stop';
 
                 if (!action) continue;
-                if (action === 'start' && !QA.perms.canAssign) continue;
-                if (action === 'stop' && !QA.perms.canManage) continue;
+                if ((action === 'start' || action === 'start2') && !QA.perms.canAssign) continue;
+                if ((action === 'stop' || action === 'partial') && !QA.perms.canManage) continue;
 
                 return {
                     action: action, widgetId: w.id, deptId: ticketDept,
-                    startLabel: w.startLabel, stopLabel: w.stopLabel,
                     startColor: w.startColor, stopColor: w.stopColor,
                     confirm: w.confirm,
                     confirmMode: w.confirmMode || (w.confirm ? 'confirm' : 'none'),
-                    countdownSeconds: w.countdownSeconds || 5
+                    countdownSeconds: w.countdownSeconds || 5,
+                    labels: {
+                        start: deptCfg.start_label || '',
+                        stop: deptCfg.stop_label || '',
+                        partial: deptCfg.partial_label || '',
+                        start2: deptCfg.start2_label || '',
+                        finish: deptCfg.finish_label || ''
+                    }
                 };
             }
             return null;
@@ -123,13 +144,22 @@
                 if (!resolved) return;
                 hasAny = true;
 
-                var icon = resolved.action === 'start' ? QA.START_ICON : QA.STOP_ICON;
-                var color = resolved.action === 'start'
-                    ? (resolved.startColor || QA.START_COLOR)
-                    : (resolved.stopColor || QA.STOP_COLOR);
-                var label = resolved.action === 'start'
-                    ? (resolved.startLabel || QA.i18n.start)
-                    : (resolved.stopLabel || QA.i18n.done);
+                var iconMap = { start: QA.START_ICON, partial: QA.PARTIAL_ICON, start2: QA.START2_ICON, stop: QA.STOP_ICON };
+                var colorMap = {
+                    start: resolved.startColor || QA.START_COLOR,
+                    partial: QA.PARTIAL_COLOR,
+                    start2: QA.START2_COLOR,
+                    stop: resolved.stopColor || QA.STOP_COLOR
+                };
+                var labelMap = {
+                    start:   resolved.labels.start || QA.i18n.start,
+                    partial: resolved.labels.partial || QA.i18n.partialReady,
+                    start2:  resolved.labels.start2 || QA.i18n.startStep2,
+                    stop:    resolved.labels.finish || resolved.labels.stop || QA.i18n.done
+                };
+                var icon = iconMap[resolved.action];
+                var color = colorMap[resolved.action];
+                var label = labelMap[resolved.action];
 
                 var $link = $('<a href="#"></a>')
                     .addClass('qa-inline-btn')
@@ -149,7 +179,7 @@
                 // Stop = "working time" (green), Start = "waiting time" (orange)
                 var info = QA.tickets[ticketId];
                 if (info && info.updated) {
-                    var timerClass = resolved.action === 'stop'
+                    var timerClass = (resolved.action === 'stop' || resolved.action === 'partial')
                         ? 'qa-timer-badge qa-timer-working'
                         : 'qa-timer-badge qa-timer-waiting';
                     var $timer = $('<span class="' + timerClass + '" data-since="' + info.updated + '" data-server="' + (info.serverNow || '') + '"></span>');
@@ -417,7 +447,11 @@
             var ticketNum = $row.find('a[href*="tickets.php"]').first().text().trim() || ticketId;
 
             if (confirmMode === 'confirm') {
-                var template = action === 'start' ? QA.i18n.confirmStart : QA.i18n.confirmStop;
+                var msgMap = {
+                    start: QA.i18n.confirmStart, stop: QA.i18n.confirmStop,
+                    partial: QA.i18n.confirmPartial, start2: QA.i18n.confirmStart2
+                };
+                var template = msgMap[action] || QA.i18n.confirmStart;
                 var message = template.replace('%s', ticketNum);
 
                 var $dlg = $('<div>').text(message);
@@ -470,9 +504,14 @@
 
             var remaining = seconds;
             var cancelled = false;
-            var color = action === 'start' ? QA.START_COLOR : QA.STOP_COLOR;
+            var colorMap = { start: QA.START_COLOR, partial: QA.PARTIAL_COLOR, start2: QA.START2_COLOR, stop: QA.STOP_COLOR };
+            var descMap = {
+                start: QA.i18n.countdownStart, stop: QA.i18n.countdownStop,
+                partial: QA.i18n.countdownPartial, start2: QA.i18n.countdownStart2
+            };
+            var color = colorMap[action] || QA.START_COLOR;
             var title = '#' + QA.escapeHtml(ticketNum);
-            var desc = action === 'start' ? QA.i18n.countdownStart : QA.i18n.countdownStop;
+            var desc = descMap[action] || '';
 
             // SVG circular ring (r=16, circumference=2*pi*16=100.53)
             var circumference = 100.53;
@@ -554,12 +593,16 @@
     // Event bindings
     $(document).on('click.quick-buttons', '.qa-inline-btn', QA.handleInlineClick);
     $(document).on('click.quick-buttons', '.qa-bulk-start', function() { QA.handleBulkAction('start'); });
+    $(document).on('click.quick-buttons', '.qa-bulk-partial', function() { QA.handleBulkAction('partial'); });
+    $(document).on('click.quick-buttons', '.qa-bulk-start2', function() { QA.handleBulkAction('start2'); });
     $(document).on('click.quick-buttons', '.qa-bulk-stop', function() { QA.handleBulkAction('stop'); });
 
     // Expose for external integration
     window.QuickButtons = {
-        bulkStart: function() { QA.handleBulkAction('start'); },
-        bulkStop:  function() { QA.handleBulkAction('stop'); }
+        bulkStart:   function() { QA.handleBulkAction('start'); },
+        bulkPartial: function() { QA.handleBulkAction('partial'); },
+        bulkStart2:  function() { QA.handleBulkAction('start2'); },
+        bulkStop:    function() { QA.handleBulkAction('stop'); }
     };
 
     $(function() { QA.init(); });

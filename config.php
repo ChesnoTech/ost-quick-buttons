@@ -3,7 +3,7 @@
  * Quick Buttons Plugin - Configuration
  *
  * @author  ChesnoTech
- * @version 2.2.0
+ * @version 4.0.0
  */
 
 require_once INCLUDE_DIR . 'class.forms.php';
@@ -28,20 +28,6 @@ class QuickButtonsConfig extends PluginConfig {
                 'required' => true,
                 'choices' => $topics,
                 'hint' => __('Each widget handles one help topic. Tickets with this topic will show Start/Stop buttons.'),
-            )),
-            'start_label' => new TextboxField(array(
-                'label' => __('Start Button Label'),
-                'required' => false,
-                'default' => '',
-                'hint' => __('Custom label for the Start button tooltip. Leave empty for default ("Start").'),
-                'configuration' => array('size' => 20, 'length' => 30),
-            )),
-            'stop_label' => new TextboxField(array(
-                'label' => __('Stop Button Label'),
-                'required' => false,
-                'default' => '',
-                'hint' => __('Custom label for the Stop button tooltip. Leave empty for default ("Done").'),
-                'configuration' => array('size' => 20, 'length' => 30),
             )),
             'start_color' => new TextboxField(array(
                 'label' => __('Start Button Color'),
@@ -128,7 +114,9 @@ class QuickButtonsConfig extends PluginConfig {
             if (empty($deptCfg['enabled']))
                 continue;
 
-            // Required: trigger and target statuses
+            $variant = $deptCfg['variant'] ?? 'single';
+
+            // Required for all variants: trigger and target statuses
             foreach (array('start_trigger_status', 'start_target_status', 'stop_target_status') as $field) {
                 if (empty($deptCfg[$field])) {
                     $errors['err'] = sprintf(
@@ -144,12 +132,48 @@ class QuickButtonsConfig extends PluginConfig {
                 }
             }
 
-            // Transfer dept is optional (empty = no transfer, e.g., mid-step in chain)
+            // Two-step variant: validate additional status fields
+            if ($variant === 'twostep') {
+                foreach (array('step2_trigger_status', 'step2_target_status', 'step2_stop_target_status') as $field) {
+                    if (empty($deptCfg[$field])) {
+                        $errors['err'] = sprintf(
+                            __('Department %s: %s is required for two-step variant'),
+                            $deptId, $field);
+                        return false;
+                    }
+                    if (!TicketStatus::lookup($deptCfg[$field])) {
+                        $errors['err'] = sprintf(
+                            __('Department %s: Status ID %s not found'),
+                            $deptId, $deptCfg[$field]);
+                        return false;
+                    }
+                }
+
+                // Validate no loops: final done != trigger
+                if ($deptCfg['step2_stop_target_status'] === $deptCfg['start_trigger_status']) {
+                    $errors['err'] = sprintf(
+                        __('Department %s: Final done status cannot equal trigger (creates loop)'),
+                        $deptId);
+                    return false;
+                }
+            }
+
+            // Transfer dept is optional (empty = no transfer)
             if (!empty($deptCfg['stop_transfer_dept'])) {
                 if (!Dept::lookup($deptCfg['stop_transfer_dept'])) {
                     $errors['err'] = sprintf(
                         __('Department %s: Transfer department not found'),
                         $deptId);
+                    return false;
+                }
+            }
+
+            // Validate label lengths (max 12 chars)
+            foreach (array('start_label', 'stop_label', 'partial_label', 'start2_label', 'finish_label') as $labelField) {
+                if (!empty($deptCfg[$labelField]) && mb_strlen($deptCfg[$labelField]) > 12) {
+                    $errors['err'] = sprintf(
+                        __('Department %s: Button label "%s" exceeds 12 characters'),
+                        $deptId, $labelField);
                     return false;
                 }
             }
