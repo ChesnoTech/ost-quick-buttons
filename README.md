@@ -1,8 +1,8 @@
 # ost-quick-buttons
 
-**Widget-based workflow buttons for osTicket 1.18+**
+**Workflow automation buttons for osTicket 1.18+**
 
-One-click Start/Stop buttons in the agent panel queue view, driven by ticket status. Supports multi-step workflows with chained widgets — from simple single-step handoffs to complex multi-department assembly lines.
+One-click action buttons in the agent panel queue view. Each ticket row shows a color-coded button based on its current status — Start, Next, or Done. Supports single-step and two-step workflows within a single widget, per-department custom labels, live timers, undo, and a built-in analytics dashboard.
 
 Built by [ChesnoTech](https://github.com/ChesnoTech).
 
@@ -10,183 +10,229 @@ Built by [ChesnoTech](https://github.com/ChesnoTech).
 
 ## Features
 
-- **Start/Stop buttons** on each ticket row in the queue view
-- **Status-driven visibility** — buttons appear/disappear based on ticket status
-- **Multi-step workflows** — chain multiple widgets for N-step processes
-- **Per-department configuration** — enable/disable buttons per department with a visual matrix UI
-- **One widget per help topic** — different workflows for different ticket types
-- **Auto-claim on Start** — assigns the ticket to the clicking agent
-- **Auto-release + transfer on Stop** — releases agent and moves ticket to the next department
-- **osTicket access role integration** — respects department access and permissions
-- **Desktop + Mobile responsive** — sticky column on desktop, card layout on mobile
-- **Three confirmation modes** — None (instant), Confirm Dialog, or Countdown with cancel window
-- **Countdown popup** — auto-execute after configurable timer (3–10s) with progress bar and cancel button
-- **Undo support** — 60-second undo window after any action
-- **Live elapsed timer** — shows how long an agent has been working on a ticket
+### Queue View Buttons
+- **4 button types** — Start (blue), Next (orange), Start Step 2 (blue), Done (green)
+- **Status-driven** — buttons appear/disappear automatically based on ticket status
+- **Per-department custom labels** — rename buttons to match your workflow (max 12 chars)
+- **Live timer badges** — waiting time on Start buttons, elapsed time on Done buttons
+- **Sticky column** on desktop, card layout on mobile
+
+### Workflow Variants
+- **Single Step** — Start + Done (claim, status change, release, transfer)
+- **Two Step** — Start + Next + Start Step 2 + Done (two independent agent phases in one widget)
+- No need for multiple widgets per topic — one widget handles both variants per department
+
+### Safety & UX
+- **Three confirmation modes** — None (instant), Confirm Dialog, Countdown with cancel
+- **Countdown popup** — auto-executes after configurable timer (3-10s) with progress bar
+- **Undo** — 60-second window to reverse any action
 - **Error recovery** — rollback claim if status change fails
-- **Dark mode support**
-- **Theme auto-detection** — works with both osTicketAwesome and default osTicket theme
+- **Permission-based visibility** — buttons hidden for agents lacking required permissions
+
+### Admin Tools
+- **Workflow Builder** — full-page visual editor with status flow diagrams
+- **Dashboard** — KPI cards, daily throughput chart, average time per step, agent leaderboard, queue snapshot
+- **Date range picker** — 7/30/90 day presets or custom From/To dates
+- **Access rules** — dashboard respects osTicket department access and limited-agent mode
+
+### Internationalization
+8 languages included: English, Russian, Arabic, Spanish, French, German, Portuguese (BR), Turkish, Chinese (Simplified). Auto-activates based on each agent's osTicket language preference.
+
+---
 
 ## How It Works
 
-Each plugin instance is a **widget** tied to one help topic. The widget defines Start/Stop behavior per department:
-
+### Single Step
 ```
-Ticket in "Collecting Parts" status
-    → Agent clicks [▶ Start] → ticket claimed, status changes to "Platform Build"
+Ticket: "Parts Ready"
+    → Agent clicks [▶ Start] → claimed, status → "Platform Build"
 
-Ticket in "Platform Build" status
-    → Agent clicks [✓ Done] → agent released, status changes to "Ready for Packing",
-      ticket transferred to Packing department
+Ticket: "Platform Build"
+    → Agent clicks [✓ Done] → released, status → "Ready for Packing", transferred to Packing dept
 ```
 
-### Multi-Step Workflows
-
-Chain multiple widgets on the same help topic for multi-step processes:
-
+### Two Step (same widget, same department)
 ```
-Widget 1 (Platform Build):
-  [▶ Start] Collecting Parts → Platform Build  [✓ Done] → Case Assembly
+Step 1:
+    [▶ Start]  Parts Ready → Platform Build (agent claimed)
+    [→ Next]   Platform Build → Case Assembly (agent released, NO transfer)
 
-Widget 2 (Case Assembly):
-  [▶ Start] Case Assembly → Case Assembly (Working)  [✓ Done] → Ready for Packing → Transfer
+Step 2:
+    [▶ Start]  Case Assembly → Case Assembly Working (new agent claimed)
+    [✓ Done]   Case Assembly Working → Ready for Packing (released + transferred)
 ```
 
-Different agents can handle each step. Platform builders pick up "Collecting Parts" tickets, case assemblers pick up "Case Assembly" tickets — all in the same department, driven by status.
+Different agents handle each step. Platform builders see Start on "Parts Ready" tickets, case assemblers see Start on "Case Assembly" tickets — all in the same department.
+
+---
 
 ## Requirements
 
 - osTicket **1.18+**
 - PHP **7.4+**
-- Works with **osTicketAwesome** theme (SVG icons) and **default osTicket** theme (Font Awesome)
+- Works with **osTicketAwesome** theme and **default osTicket** theme (auto-detected)
 
 ## Installation
 
-1. Download or clone this repository into your osTicket plugins directory:
-   ```
-   cd /path/to/osticket/include/plugins/
-   git clone https://github.com/ChesnoTech/ost-quick-buttons.git quick-buttons
-   ```
+```bash
+cd /path/to/osticket/include/plugins/
+git clone https://github.com/ChesnoTech/ost-quick-buttons.git quick-buttons
+```
 
-2. In osTicket Admin Panel, go to **Manage > Plugins**
+Then in Admin Panel: **Manage > Plugins > Add New Plugin > Quick Buttons > Active**
 
-3. Click **Add New Plugin** and select **Quick Buttons**
+## Quick Start
 
-4. Set the plugin status to **Active**
+1. **Create a widget**: Plugins > Quick Buttons > Instances > Add New Instance
+2. **Instance tab**: Name it, set Status to "Enabled"
+3. **Config tab**: Select a Help Topic, set confirmation mode
+4. **Open Workflow Builder**: Click the button on the Config tab
+5. **Enable a department**: Toggle ON, select variant (Single/Two Step)
+6. **Configure statuses**: Pick Trigger → Working → Done from the flow diagram
+7. **Set labels**: Custom button text per department (optional, max 12 chars)
+8. **Save**: Click Save Changes
 
-5. Click the **Instances** tab and **Add New Instance** to create your first widget
+## Workflow Builder
 
-## Configuration
+The Workflow Builder is a full-page visual editor for configuring department workflows.
 
-### Creating a Widget
+### Single Step Card
+```
+● Assembly                                    [ON]
+Variant: Single Step
 
-1. Go to **Admin Panel > Manage > Plugins > Quick Buttons**
-2. Click **Instances** tab > **Add New Instance**
-3. **Instance tab**: Set name and status to "Enabled"
-4. **Config tab**:
-   - Select a **Help Topic** (one widget per topic)
-   - The **department matrix** appears with all departments
-   - Check **Enabled** for each department that should show buttons
-   - Configure the status chain for each enabled department:
+TRIGGER              WORKING              DONE
+[Parts Ready] ──▶── [Platform Build] ──✓── [Ready for Packing]
 
-| Field | Description |
-|-------|-------------|
-| **Start: Trigger Status** | Ticket status that makes the Start button visible |
-| **Start: Target Status** | Status set after clicking Start (also triggers the Stop button) |
-| **Stop: Target Status** | Status set after clicking Stop |
-| **Stop: Transfer To** | Department to transfer the ticket to (leave empty for no transfer) |
+Labels: [Start] [Done]
+Transfer to: [Marketplace Packing]
+```
 
-### Button Behavior
+### Two Step Card
+```
+● Assembly                                    [ON]
+Variant: Two Step
 
-| Button | Icon | Color | Actions |
-|--------|------|-------|---------|
-| **Start** | ▶ Play | Blue (#128DBE) | Claim ticket + Change status |
-| **Stop** | ✓ Done | Green (#27ae60) | Change status + Release agent + Transfer (optional) |
+STEP 1
+TRIGGER              WORKING
+[Parts Ready] ──▶── [Platform Build] ──⏩──
+Labels: [Build] [Next]
 
-### Confirmation Modes
+STEP 2
+STEP 2 TRIGGER       STEP 2 WORKING       FINAL DONE
+[Case Assembly] ──▶── [Case Working] ──✓── [Ready for Packing]
+Labels: [Case] [Ship]
 
-Each widget can be configured with one of three confirmation modes:
+Transfer to: [Marketplace Packing]
+```
 
-| Mode | Behavior | Best For |
-|------|----------|----------|
-| **None** | Instant execution on click | Trusted agents, low-risk actions |
-| **Confirm Dialog** | Modal dialog with Confirm/Cancel buttons | Critical workflows, training |
-| **Countdown** | Auto-executes after N seconds with cancel window | High-volume workflows (40+ tickets/day) |
+Features: search departments, enable/disable all, clone config, apply templates, inline validation.
 
-The **Countdown** mode shows a popup near the button with:
-- Action description (what will happen)
-- Countdown timer with animated progress bar
-- Cancel button to abort before execution
-- Configurable duration (3–10 seconds per widget)
+## Button Types
 
-### Multi-Step Setup
+| Button | Icon | Color | Actions | When Visible |
+|--------|------|-------|---------|-------------|
+| **Start** | ▶ Play | Blue #128DBE | Claim + status change | Ticket matches trigger status |
+| **Next** | → Arrow | Orange #e67e22 | Release + status change (no transfer) | Two-step: ticket matches working status |
+| **Start 2** | ▶ Play | Blue #2980b9 | Claim + status change | Two-step: ticket matches step 2 trigger |
+| **Done** | ✓+↪ Stacked | Green #27ae60 | Release + status change + transfer | Ticket matches stop trigger |
 
-To create a multi-step workflow, create multiple widget instances for the same help topic:
+## Confirmation Modes
 
-1. **Widget 1** — handles step 1 (e.g., Platform Build)
-   - Stop target = step 2's trigger status
-   - Stop transfer = empty (stays in same department)
+| Mode | Clicks | Safety | Best For |
+|------|--------|--------|----------|
+| **None** | 1 | Low | Trusted agents |
+| **Confirm Dialog** | 2 | High | Critical workflows |
+| **Countdown** | 1 | High | High-volume (40+ tickets/day) |
 
-2. **Widget 2** — handles step 2 (e.g., Case Assembly)
-   - Start trigger = Widget 1's stop target
-   - Stop transfer = next department
-
-The widgets chain automatically through matching statuses.
-
-## Access Control
-
-- Buttons are shown based on the agent's **department access** (`getDepts()` — primary + extended + managed departments)
-- Actions are verified server-side against osTicket permissions:
-  - **Start (Claim)**: requires `Ticket::PERM_ASSIGN`
-  - **Status Change**: requires `canManageTickets()`
-  - **Transfer**: requires `Ticket::PERM_TRANSFER`
-  - **Release**: requires `Ticket::PERM_RELEASE`
+The Countdown popup shows the action description, animated progress bar, and a Cancel button. Auto-executes after the configured number of seconds (3-10).
 
 ## Dashboard
 
-The plugin includes a built-in workflow dashboard accessible from the plugin admin page (Dashboard tab). It shows:
+Accessible from Admin Panel > Plugins > Quick Buttons > Dashboard tab, or as a standalone page.
 
-- **Tickets Per Day** — bar chart of daily status change throughput
+### KPI Cards
+- **Total Processed** — tickets processed in the selected period
+- **Avg Per Day** — average daily throughput
+- **Open Tickets** — current queue depth
+- **Active Agents** — agents with actions in the period
+
+### Charts & Tables
+- **Daily Throughput** — bar chart (weekly rollup for 90-day ranges)
 - **Average Time Per Step** — how long tickets spend in each status
-- **Agent Leaderboard** — top agents by tickets claimed
-- **Current Queue** — snapshot of open tickets by status
+- **Agent Leaderboard** — ranked by tickets claimed
+- **Current Queue** — open tickets grouped by status
 
-Supports 7-day, 30-day, and 90-day time ranges.
+### Date Range
+Preset buttons (7/30/90 days) or custom From/To date picker.
 
-## Testing
+### Access Rules
+- Agents see only data for their accessible departments
+- Access-limited agents see "My Performance" instead of the full leaderboard
+- Admins see all data
 
-Run the self-contained test suite (no osTicket bootstrap required):
+## Access Control
 
-```bash
-php tests/QuickButtonsTest.php
-```
+Buttons respect osTicket's built-in permission system:
 
-53 tests covering: choiceKey extraction, JSON parsing, config validation, duration formatting, button resolution logic, and undo state management.
+| Action | Required Permission |
+|--------|-------------------|
+| Start / Start 2 (Claim) | `Ticket::PERM_ASSIGN` |
+| Status Change | `canManageTickets()` |
+| Transfer | `Ticket::PERM_TRANSFER` |
+| Release | `Ticket::PERM_RELEASE` |
 
-## File Structure
-
-```
-quick-buttons/
-├── plugin.php                    # Plugin metadata
-├── config.php                    # QuickButtonsConfig — topic + JSON widget config
-├── class.QuickButtonsPlugin.php  # Bootstrap, AJAX routes, asset injection
-├── class.QuickButtonsAjax.php    # API endpoints: widgets, execute, admin-config-data
-└── assets/
-    ├── quick-buttons.js          # Queue view button rendering + click handlers
-    ├── quick-buttons.css         # Styles for osTicketAwesome theme (SVG icons)
-    ├── quick-buttons-default.css # Styles for default osTicket theme (Font Awesome)
-    ├── quick-buttons-admin.js    # Admin config matrix UI builder
-    └── quick-buttons-admin.css   # Admin matrix table styles
-```
+Agents only see buttons for departments they have access to (primary + extended + managed).
 
 ## API Endpoints
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/scp/ajax.php/quick-buttons/widgets` | POST | Get widget configs + ticket metadata |
-| `/scp/ajax.php/quick-buttons/execute` | POST | Execute Start/Stop action on tickets |
-| `/scp/ajax.php/quick-buttons/admin-config-data` | GET | Get departments + statuses for admin UI |
-| `/scp/ajax.php/quick-buttons/assets/*` | GET | Serve JS/CSS assets with ETag caching |
+| `/quick-buttons/widgets` | POST | Widget configs + ticket metadata for queue buttons |
+| `/quick-buttons/execute` | POST | Execute action (start/partial/start2/stop) |
+| `/quick-buttons/undo` | POST | Undo last action (60s window) |
+| `/quick-buttons/dashboard` | GET | Dashboard data (JSON) with date range support |
+| `/quick-buttons/dashboard-page` | GET | Standalone dashboard HTML page |
+| `/quick-buttons/workflow-builder` | GET | Workflow Builder page |
+| `/quick-buttons/workflow-builder-save` | POST | Save Workflow Builder config |
+| `/quick-buttons/admin-config-data` | GET | Departments + statuses for admin UI |
+| `/quick-buttons/assets/*` | GET | JS/CSS assets with ETag caching |
+
+All endpoints are prefixed with `/scp/ajax.php`.
+
+## File Structure
+
+```
+quick-buttons/
+├── plugin.php                      # Plugin manifest
+├── config.php                      # Config class + validation
+├── class.QuickButtonsPlugin.php    # Bootstrap, routes, asset injection
+├── class.QuickButtonsAjax.php      # All API endpoints
+├── CONTRIBUTING.md                 # Git Flow branching guide
+├── CHANGELOG.md                    # Version history
+├── UPGRADE.md                      # Upgrade instructions
+├── LICENSE                         # MIT
+├── assets/
+│   ├── quick-buttons.js            # Queue view: buttons, timers, countdown, undo
+│   ├── quick-buttons.css           # Queue view styles (osTicketAwesome)
+│   ├── quick-buttons-default.css   # Queue view styles (default theme)
+│   ├── quick-buttons-admin.js      # Admin config tab enhancements
+│   ├── workflow-builder.js         # Full-page Workflow Builder UI
+│   ├── workflow-builder.css        # Workflow Builder styles
+│   ├── workflow-dashboard.js       # Dashboard page
+│   └── workflow-dashboard.css      # Dashboard styles
+├── i18n/LC_MESSAGES/               # Translations
+│   ├── ru/quick-buttons.mo.php     # Russian
+│   ├── ar/quick-buttons.mo.php     # Arabic
+│   ├── es/quick-buttons.mo.php     # Spanish
+│   ├── fr/quick-buttons.mo.php     # French
+│   ├── de/quick-buttons.mo.php     # German
+│   ├── pt/quick-buttons.mo.php     # Portuguese (BR)
+│   ├── tr/quick-buttons.mo.php     # Turkish
+│   └── zh_CN/quick-buttons.mo.php  # Chinese (Simplified)
+└── tests/
+    └── QuickButtonsTest.php        # 53 self-contained tests
+```
 
 ## Compatibility
 
@@ -199,23 +245,26 @@ quick-buttons/
 
 Theme detection is automatic — the plugin checks for the `osta/` directory at runtime and serves the appropriate CSS.
 
+## Adding a Language
+
+Create `i18n/LC_MESSAGES/{locale}/quick-buttons.mo.php` using any existing translation as a template. The file returns a PHP array mapping English strings to translations. See `i18n/LC_MESSAGES/ru/quick-buttons.mo.php` for the full list of 90+ translatable strings.
+
 ## Support Policy
 
 This plugin is provided **as-is**, free and open source, with **no guaranteed support**.
 
-- Bug reports: Open a [GitHub Issue](https://github.com/ChesnoTech/ost-quick-buttons/issues) with steps to reproduce
-- Feature requests: Open a GitHub Issue — no promises on timeline
-- Pull requests: Welcome, but review may take time
+- Bug reports: [GitHub Issues](https://github.com/ChesnoTech/ost-quick-buttons/issues) with steps to reproduce
+- Feature requests: GitHub Issues (no timeline guarantees)
+- Pull requests: Welcome, review may take time
 - **No email support, no SLA, no paid support plans**
-- For professional setup or custom workflows: contact via GitHub Issues
 
-Use at your own risk. **Always test in a staging environment before deploying to production.** Back up your database before installing or upgrading.
+**Always test in a staging environment before production.** Back up your database before installing or upgrading.
 
 ## Disclaimer
 
-THIS SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND. The author is not responsible for any data loss, downtime, or damage caused by the use of this plugin. It is your responsibility to test the plugin in your environment before production deployment.
+THIS SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND. The author is not responsible for any data loss, downtime, or damage caused by use of this plugin. It is your responsibility to test in your environment before production deployment.
 
-This plugin modifies ticket status, assignment, and department via osTicket's built-in API. It does **not** directly modify the database, but actions performed (claim, transfer, status change) are permanent and trigger osTicket's native notification and logging systems.
+This plugin modifies ticket status, assignment, and department via osTicket's built-in API. Actions (claim, transfer, status change) are permanent and trigger osTicket's native notifications.
 
 ## License
 
@@ -224,5 +273,3 @@ MIT License. See [LICENSE](LICENSE) for details.
 ## Author
 
 **ChesnoTech** — [github.com/ChesnoTech](https://github.com/ChesnoTech)
-
-*Product Visionary. Systems Architect. Founder.*
