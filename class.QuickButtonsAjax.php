@@ -354,7 +354,7 @@ class QuickButtonsAjax extends AjaxController {
             // Handle legacy BooleanField migration (1 = confirm, '' = none)
             if ($confirmMode === '1') $confirmMode = 'confirm';
             if ($confirmMode === '' || $confirmMode === '0') $confirmMode = 'none';
-            $countdownSec = max(3, min(10, (int) ($config->get('countdown_seconds') ?: 5)));
+            $countdownSec = max(3, min(30, (int) ($config->get('countdown_seconds') ?: 5)));
 
             $widgets[] = array(
                 'id'             => $instance->getId(),
