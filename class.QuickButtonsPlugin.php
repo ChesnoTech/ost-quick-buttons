@@ -97,8 +97,17 @@ class QuickButtonsPlugin extends Plugin {
             '<script type="text/javascript" src="%s/admin-js?v=%s"></script>',
             $base, $v);
 
-        $buffer = str_replace('</head>', $css . "\n" . $adminCss . "\n</head>", $buffer);
-        $buffer = str_replace('</body>', $js . "\n" . $adminJs . "\n</body>", $buffer);
+        // Only inject admin assets on plugin admin pages
+        $isAdminPage = (strpos($_SERVER['REQUEST_URI'] ?? '', 'plugins.php') !== false);
+        $headInject = $css;
+        $bodyInject = $js;
+        if ($isAdminPage) {
+            $headInject .= "\n" . $adminCss;
+            $bodyInject .= "\n" . $adminJs;
+        }
+
+        $buffer = str_replace('</head>', $headInject . "\n</head>", $buffer);
+        $buffer = str_replace('</body>', $bodyInject . "\n</body>", $buffer);
 
         return $buffer;
     }

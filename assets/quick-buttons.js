@@ -63,6 +63,12 @@
                 success: function(data) {
                     QA.widgets = data.widgets || [];
                     QA.tickets = data.tickets || {};
+                    QA.serverNow = data.serverNow || '';
+                    QA.serverOffset = 0;
+                    if (QA.serverNow) {
+                        var serverMs = new Date(QA.serverNow.replace(' ', 'T') + 'Z').getTime();
+                        QA.serverOffset = serverMs - Date.now();
+                    }
                     if (data.i18n) QA.i18n = $.extend(QA.i18n, data.i18n);
                     if (data.perms) QA.perms = data.perms;
                     if (QA.widgets.length) {
@@ -182,7 +188,7 @@
                     var timerClass = (resolved.action === 'stop' || resolved.action === 'partial')
                         ? 'qa-timer-badge qa-timer-working'
                         : 'qa-timer-badge qa-timer-waiting';
-                    var $timer = $('<span class="' + timerClass + '" data-since="' + info.updated + '" data-server="' + (info.serverNow || '') + '"></span>');
+                    var $timer = $('<span class="' + timerClass + '" data-since="' + info.updated + '"></span>');
                     $link.data('timer-el', $timer);
                     $link.attr('data-timer', '1');
                 }
@@ -218,34 +224,43 @@
         // ================================================================
 
         startTimers: function() {
-            QA.updateTimers();
-            QA.timerInterval = setInterval(QA.updateTimers, 1000);
-        },
-
-        updateTimers: function() {
+            // Cache badge references for efficient per-second updates
+            QA.timerBadges = [];
             $('.qa-timer-badge').each(function() {
                 var $el = $(this);
                 var since = $el.data('since');
-                var serverNow = $el.data('server');
                 if (!since) return;
-
-                // Calculate offset between server time and client time
-                var serverMs = new Date(since.replace(' ', 'T') + 'Z').getTime();
-                var nowMs = Date.now();
-                if (serverNow) {
-                    var serverNowMs = new Date(serverNow.replace(' ', 'T') + 'Z').getTime();
-                    var offset = nowMs - serverNowMs;
-                    nowMs = nowMs - offset; // adjust to server time
-                }
-
-                var diffSec = Math.max(0, Math.floor((nowMs - serverMs) / 1000));
-                var formatted = QA.formatDuration(diffSec);
-                $el.text(formatted);
-                // Update tooltip — "waiting" for Start, "elapsed" for Done
-                var isWaiting = $el.hasClass('qa-timer-waiting');
-                var suffix = isWaiting ? (QA.i18n.waiting || 'waiting') : (QA.i18n.elapsed || 'elapsed');
-                $el.siblings('.qa-inline-btn').attr('title', formatted + ' ' + suffix);
+                var sinceMs = new Date(since.replace(' ', 'T') + 'Z').getTime();
+                QA.timerBadges.push({
+                    $el: $el,
+                    sinceMs: sinceMs,
+                    isWaiting: $el.hasClass('qa-timer-waiting'),
+                    $btn: $el.siblings('.qa-inline-btn')
+                });
             });
+            if (QA.timerBadges.length) {
+                QA.updateTimers();
+                QA.timerInterval = setInterval(QA.updateTimers, 1000);
+            }
+        },
+
+        updateTimers: function() {
+            var nowMs = Date.now() + (QA.serverOffset || 0);
+            for (var i = 0; i < QA.timerBadges.length; i++) {
+                var badge = QA.timerBadges[i];
+                var diffSec = Math.max(0, Math.floor((nowMs - badge.sinceMs) / 1000));
+                var formatted = QA.formatDuration(diffSec);
+                badge.$el.text(formatted);
+                var suffix = badge.isWaiting ? (QA.i18n.waiting || 'waiting') : (QA.i18n.elapsed || 'elapsed');
+                badge.$btn.attr('title', formatted + ' ' + suffix);
+            }
+        },
+
+        handleAjaxError: function(xhr) {
+            var msg = '';
+            try { msg = JSON.parse(xhr.responseText).error || xhr.responseText; }
+            catch (ex) { msg = xhr.responseText || 'Unknown error'; }
+            $.sysAlert(QA.i18n.error, msg);
         },
 
         formatDuration: function(totalSec) {
@@ -324,12 +339,7 @@
                     if (resp.canUndo) QA.showUndoBar();
                     $.pjax.reload('#pjax-container');
                 },
-                error: function(xhr) {
-                    var msg = '';
-                    try { msg = JSON.parse(xhr.responseText).error || xhr.responseText; }
-                    catch (ex) { msg = xhr.responseText || 'Unknown error'; }
-                    $.sysAlert(QA.i18n.error, msg);
-                }
+                error: QA.handleAjaxError
             });
         },
 
@@ -380,12 +390,7 @@
                 success: function() {
                     $.pjax.reload('#pjax-container');
                 },
-                error: function(xhr) {
-                    var msg = '';
-                    try { msg = JSON.parse(xhr.responseText).error || xhr.responseText; }
-                    catch (ex) { msg = xhr.responseText || 'Unknown error'; }
-                    $.sysAlert(QA.i18n.error, msg);
-                }
+                error: QA.handleAjaxError
             });
         },
 
@@ -433,10 +438,7 @@
                     },
                     error: function(xhr) {
                         delete QA.executing[ticketId];
-                        var msg = '';
-                        try { msg = JSON.parse(xhr.responseText).error || xhr.responseText; }
-                        catch (ex) { msg = xhr.responseText || 'Unknown error'; }
-                        $.sysAlert(QA.i18n.error, msg);
+                        QA.handleAjaxError(xhr);
                         $btn.removeClass('qa-loading');
                         $btn.html(originalHtml);
                     }
@@ -568,23 +570,27 @@
                 }
             }, 1000);
 
+            // Cancel handler — shared cleanup
+            var doCancel = function() {
+                if (cancelled) return;
+                cancelled = true;
+                clearInterval(intervalId);
+                $(document).off('click.qa-countdown');
+                $popup.addClass('qa-cd-cancelled');
+                setTimeout(function() { $popup.remove(); }, 250);
+            };
+
             // Cancel button
             $cancelBtn.on('click', function(e) {
                 e.stopPropagation();
-                cancelled = true;
-                clearInterval(intervalId);
-                $popup.addClass('qa-cd-cancelled');
-                setTimeout(function() { $popup.remove(); }, 250);
+                doCancel();
             });
 
             // Click outside to cancel
             setTimeout(function() {
-                $(document).one('click.qa-countdown', function(e) {
-                    if (!$(e.target).closest('.qa-countdown-popup').length && !cancelled) {
-                        cancelled = true;
-                        clearInterval(intervalId);
-                        $popup.remove();
-                    }
+                $(document).on('click.qa-countdown', function(e) {
+                    if (!$(e.target).closest('.qa-countdown-popup').length)
+                        doCancel();
                 });
             }, 100);
         }

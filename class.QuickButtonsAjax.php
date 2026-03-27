@@ -30,14 +30,41 @@ class QuickButtonsAjax extends AjaxController {
     }
 
     private static function parseWidgetConfig($config) {
+        if (method_exists($config, 'getWidgetConfig'))
+            return $config->getWidgetConfig();
         $raw = strip_tags($config->get('widget_config') ?: '');
         $data = @json_decode($raw, true);
         return is_array($data) ? $data : array();
     }
 
+    private static $pluginCache = null;
     private static function findPlugin() {
-        return Plugin::objects()->findFirst(
-            array('install_path' => 'plugins/quick-buttons'));
+        if (self::$pluginCache === null)
+            self::$pluginCache = Plugin::objects()->findFirst(
+                array('install_path' => 'plugins/quick-buttons'));
+        return self::$pluginCache;
+    }
+
+    private static function getDeptList() {
+        $departments = array();
+        foreach (Dept::getDepartments() as $id => $name)
+            $departments[] = array('id' => (string) $id, 'name' => $name);
+        return $departments;
+    }
+
+    private static function getStatusList() {
+        $statuses = array();
+        if ($items = TicketStatusList::getStatuses(array('enabled' => true))) {
+            foreach ($items as $s) {
+                $state = $s->getState();
+                $statuses[] = array(
+                    'id'    => (string) $s->getId(),
+                    'name'  => $s->getName(),
+                    'state' => $state ? ucfirst($state) : __('Custom'),
+                );
+            }
+        }
+        return $statuses;
     }
 
     private function requireStaff() {
@@ -54,25 +81,9 @@ class QuickButtonsAjax extends AjaxController {
     function getAdminConfigData() {
         $this->requireStaff();
 
-        $departments = array();
-        foreach (Dept::getDepartments() as $id => $name)
-            $departments[] = array('id' => (string) $id, 'name' => $name);
-
-        $statuses = array();
-        if ($items = TicketStatusList::getStatuses(array('enabled' => true))) {
-            foreach ($items as $s) {
-                $state = $s->getState();
-                $statuses[] = array(
-                    'id'    => (string) $s->getId(),
-                    'name'  => $s->getName(),
-                    'state' => $state ? ucfirst($state) : __('Custom'),
-                );
-            }
-        }
-
         return $this->json_encode(array(
-            'departments' => $departments,
-            'statuses'    => $statuses,
+            'departments' => self::getDeptList(),
+            'statuses'    => self::getStatusList(),
             'i18n'        => array(
                 'department'    => __('Department'),
                 'enabled'       => __('Enabled'),
@@ -108,23 +119,8 @@ class QuickButtonsAjax extends AjaxController {
 
         $config = $instance->getConfig();
 
-        // Load departments
-        $departments = array();
-        foreach (Dept::getDepartments() as $id => $name)
-            $departments[] = array('id' => (string) $id, 'name' => $name);
-
-        // Load statuses
-        $statuses = array();
-        if ($items = TicketStatusList::getStatuses(array('enabled' => true))) {
-            foreach ($items as $s) {
-                $state = $s->getState();
-                $statuses[] = array(
-                    'id'    => (string) $s->getId(),
-                    'name'  => $s->getName(),
-                    'state' => $state ? ucfirst($state) : __('Custom'),
-                );
-            }
-        }
+        $departments = self::getDeptList();
+        $statuses = self::getStatusList();
 
         // Current widget config
         $widgetConfig = self::parseWidgetConfig($config);
@@ -414,7 +410,6 @@ class QuickButtonsAjax extends AjaxController {
                             'status'    => $row['status_id'] ? (string) $row['status_id'] : null,
                             'staff'     => $row['staff_id'] ? (string) $row['staff_id'] : null,
                             'updated'   => $row['lastupdate'] ?: null,
-                            'serverNow' => date('Y-m-d H:i:s'),
                         );
                     }
                     $tickets = (object) $map;
@@ -423,10 +418,11 @@ class QuickButtonsAjax extends AjaxController {
         }
 
         return $this->json_encode(array(
-            'widgets' => $widgets,
-            'tickets' => $tickets,
-            'i18n'    => $this->getI18nStrings(),
-            'perms'   => $this->getAgentPerms($thisstaff),
+            'widgets'   => $widgets,
+            'tickets'   => $tickets,
+            'serverNow' => date('Y-m-d H:i:s'),
+            'i18n'      => $this->getI18nStrings(),
+            'perms'     => $this->getAgentPerms($thisstaff),
         ));
     }
 
@@ -973,6 +969,44 @@ class QuickButtonsAjax extends AjaxController {
                     'count'      => (int) $row['cnt'],
                 );
 
+        // 5. Calculated field values per agent (if CF log table exists)
+        $cfValues = array();
+        $prefix = TABLE_PREFIX;
+        $cfTableExists = db_query("SHOW TABLES LIKE '{$prefix}calculated_fields_log'");
+        if ($cfTableExists && db_num_rows($cfTableExists) > 0) {
+            $cfAgentFilter = $isLimited
+                ? ' AND l.staff_id = ' . (int) $thisstaff->getId()
+                : '';
+            // Dept filter: join ticket table to respect department access
+            $cfDeptJoin = '';
+            $cfDeptFilter = '';
+            if (!$thisstaff->isAdmin() && $accessDepts) {
+                $cfDeptJoin = " JOIN {$prefix}ticket tk ON l.ticket_id = tk.ticket_id";
+                $cfDeptFilter = ' AND tk.dept_id IN (' . implode(',', array_map('intval', $accessDepts)) . ')';
+            }
+            $cfRes = db_query(
+                "SELECT l.staff_id, s.firstname, s.lastname,
+                        SUM(l.field_value) AS total,
+                        COUNT(*) AS cnt
+                 FROM {$prefix}calculated_fields_log l
+                 LEFT JOIN {$prefix}staff s ON l.staff_id = s.staff_id
+                 {$cfDeptJoin}
+                 WHERE l.created >= '{$since}' AND l.created <= '{$until}'
+                   {$cfAgentFilter} {$cfDeptFilter}
+                 GROUP BY l.staff_id
+                 ORDER BY total DESC"
+            );
+            if ($cfRes) {
+                while ($row = db_fetch_array($cfRes)) {
+                    $cfValues[] = array(
+                        'name'  => trim($row['firstname'] . ' ' . $row['lastname']) ?: 'Agent #' . $row['staff_id'],
+                        'total' => round((float) $row['total'], 2),
+                        'count' => (int) $row['cnt'],
+                    );
+                }
+            }
+        }
+
         // KPI summaries
         $totalProcessed = array_sum(array_column($daily, 'count'));
         $avgPerDay = $days > 0 ? round($totalProcessed / $days, 1) : 0;
@@ -988,6 +1022,7 @@ class QuickButtonsAjax extends AjaxController {
             'avgTimes' => $avgTimes,
             'agents'   => $agents,
             'queue'    => $queue,
+            'cfValues' => $cfValues,
             'isLimited'=> $isLimited,
             'kpi'      => array(
                 'totalProcessed' => $totalProcessed,
@@ -1003,12 +1038,17 @@ class QuickButtonsAjax extends AjaxController {
                 'agentLeader'    => __('Agent Leaderboard'),
                 'myPerformance'  => __('My Performance'),
                 'currentQueue'   => __('Current Queue'),
+                'fieldValues'    => __('Field Values'),
                 'status'         => __('Status'),
                 'avgTime'        => __('Avg Time'),
                 'transitions'    => __('Transitions'),
                 'agent'          => __('Agent'),
                 'claimed'        => __('Claimed'),
                 'tickets'        => __('Tickets'),
+                'totalValue'     => __('Total'),
+                'ticketCount'    => __('Tickets'),
+                'average'        => __('Average'),
+                'total'          => __('Total'),
                 'last7days'      => __('Last 7 Days'),
                 'last30days'     => __('Last 30 Days'),
                 'last90days'     => __('Last 90 Days'),
