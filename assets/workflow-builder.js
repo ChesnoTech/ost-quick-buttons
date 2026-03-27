@@ -32,22 +32,42 @@
         return str;
     }
 
-    function statusOptions(selected) {
-        var html = '<option value="">' + esc(t('selectStatus')) + '</option>';
+    // Pre-build options HTML once (without selected attribute)
+    var _statusOptionsCache = null;
+    var _deptOptionsCache = null;
+
+    function buildStatusOptionsCache() {
+        if (_statusOptionsCache) return;
+        _statusOptionsCache = '';
         D.statuses.forEach(function(s) {
-            var sel = s.id === selected ? ' selected' : '';
-            html += '<option value="' + esc(s.id) + '"' + sel + '>' +
+            _statusOptionsCache += '<option value="' + esc(s.id) + '">' +
                 esc(s.name) + ' (' + esc(s.state) + ')</option>';
         });
+    }
+
+    function buildDeptOptionsCache() {
+        if (_deptOptionsCache) return;
+        _deptOptionsCache = '';
+        D.departments.forEach(function(d) {
+            _deptOptionsCache += '<option value="' + esc(d.id) + '">' + esc(d.name) + '</option>';
+        });
+    }
+
+    function statusOptions(selected) {
+        buildStatusOptionsCache();
+        var html = '<option value="">' + esc(t('selectStatus')) + '</option>' + _statusOptionsCache;
+        if (selected) {
+            html = html.replace('value="' + selected + '"', 'value="' + selected + '" selected');
+        }
         return html;
     }
 
     function deptOptions(selected) {
-        var html = '<option value="">' + esc(t('selectNone')) + '</option>';
-        D.departments.forEach(function(d) {
-            var sel = d.id === selected ? ' selected' : '';
-            html += '<option value="' + esc(d.id) + '"' + sel + '>' + esc(d.name) + '</option>';
-        });
+        buildDeptOptionsCache();
+        var html = '<option value="">' + esc(t('selectNone')) + '</option>' + _deptOptionsCache;
+        if (selected) {
+            html = html.replace('value="' + selected + '"', 'value="' + selected + '" selected');
+        }
         return html;
     }
 
@@ -262,7 +282,7 @@
                 cb.checked = true;
                 updateCard(cb.closest('.wb-card'));
             });
-            serializeAll();
+            serializeAllDebounced();
             markDirty();
             updateBadge();
         });
@@ -272,7 +292,7 @@
                 cb.checked = false;
                 updateCard(cb.closest('.wb-card'));
             });
-            serializeAll();
+            serializeAllDebounced();
             markDirty();
             updateBadge();
         });
@@ -304,7 +324,7 @@
             }
 
             validateCard(card);
-            serializeAll();
+            serializeAllDebounced();
             markDirty();
         });
 
@@ -373,9 +393,12 @@
         var trigger = card.querySelector('.wb-sel-trigger').value;
         var working = card.querySelector('.wb-sel-working').value;
         var done = card.querySelector('.wb-sel-done').value;
+        var variantSel = card.querySelector('.wb-sel-variant');
+        var variant = variantSel ? variantSel.value : 'single';
 
         var warnings = [];
 
+        // Step 1 validation (both variants)
         if (!trigger) warnings.push(t('triggerRequired'));
         if (!working) warnings.push(t('workingRequired'));
         if (!done) warnings.push(t('doneRequired'));
@@ -387,6 +410,22 @@
         if (working && working === done)
             warnings.push(t('workingEqualsDone'));
 
+        // Step 2 validation (twostep only)
+        if (variant === 'twostep') {
+            var s2t = (card.querySelector('.wb-sel-step2-trigger') || {}).value || '';
+            var s2w = (card.querySelector('.wb-sel-step2-working') || {}).value || '';
+            var s2d = (card.querySelector('.wb-sel-final-done') || {}).value || '';
+
+            if (!s2t) warnings.push(t('step2TriggerRequired') || 'Step 2 trigger is required');
+            if (!s2w) warnings.push(t('step2WorkingRequired') || 'Step 2 working is required');
+            if (!s2d) warnings.push(t('finalDoneRequired') || 'Final done is required');
+
+            if (s2t && s2w && s2t === s2w) warnings.push('Step 2: trigger = working (no-op)');
+            if (s2w && s2d && s2w === s2d) warnings.push('Step 2: working = done (no-op)');
+            if (s2d && trigger && s2d === trigger) warnings.push('Final done = Step 1 trigger (loop!)');
+        }
+
+        // Clear pill styling
         card.querySelectorAll('.wb-flow-pill').forEach(function(pill) {
             pill.classList.remove('wb-invalid');
         });
@@ -394,6 +433,18 @@
         if (!trigger) card.querySelector('.wb-pill-trigger').classList.add('wb-invalid');
         if (!working) card.querySelector('.wb-pill-working').classList.add('wb-invalid');
         if (!done) card.querySelector('.wb-pill-done').classList.add('wb-invalid');
+
+        if (variant === 'twostep') {
+            var s2tEl = card.querySelector('.wb-pill-step2-trigger');
+            var s2wEl = card.querySelector('.wb-pill-step2-working');
+            var s2dEl = card.querySelector('.wb-pill-final-done');
+            var s2t = (card.querySelector('.wb-sel-step2-trigger') || {}).value || '';
+            var s2w = (card.querySelector('.wb-sel-step2-working') || {}).value || '';
+            var s2d = (card.querySelector('.wb-sel-final-done') || {}).value || '';
+            if (!s2t && s2tEl) s2tEl.classList.add('wb-invalid');
+            if (!s2w && s2wEl) s2wEl.classList.add('wb-invalid');
+            if (!s2d && s2dEl) s2dEl.classList.add('wb-invalid');
+        }
 
         warnings.forEach(function(w) {
             warnEl.innerHTML += '<div class="wb-warning">' + esc(w) + '</div>';
@@ -408,17 +459,20 @@
         if (!template) return;
 
         var transfer = card.querySelector('.wb-sel-transfer');
+        var clearTeam = card.querySelector('.wb-clear-team');
 
         switch (template) {
             case 'single':
+                // Single step: clear step2 fields, keep transfer
                 break;
-            case 'step1':
-                transfer.value = '';
-                break;
-            case 'step2':
+            case 'twostep':
+                // Two step: clear transfer (only set on final step done)
+                if (transfer) transfer.value = '';
+                if (clearTeam) clearTeam.checked = false;
                 break;
         }
 
+        validateCard(card);
         toast(t('templateApplied'), 'success');
     }
 
@@ -469,6 +523,12 @@
     // ================================================================
     //  Serialize & Save
     // ================================================================
+
+    var serializeTimer = null;
+    function serializeAllDebounced() {
+        clearTimeout(serializeTimer);
+        serializeTimer = setTimeout(serializeAll, 150);
+    }
 
     function serializeAll() {
         existing = {};

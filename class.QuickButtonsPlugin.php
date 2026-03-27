@@ -14,17 +14,7 @@ class QuickButtonsPlugin extends Plugin {
     static private $bootstrapped = false;
 
     function bootstrap() {
-        if (self::$bootstrapped)
-            return;
-        self::$bootstrapped = true;
-
-        self::registerTranslations();
-
-        if (!defined('STAFFINC_DIR'))
-            return;
-
-        Signal::connect('ajax.scp', array('QuickButtonsPlugin', 'registerAjaxRoutes'));
-        ob_start(array('QuickButtonsPlugin', 'injectAssets'));
+        self::bootstrapStatic();
     }
 
     static function registerTranslations() {

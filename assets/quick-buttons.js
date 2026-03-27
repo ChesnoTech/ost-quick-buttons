@@ -27,12 +27,29 @@
         executing: {},
         timerInterval: null,
 
+        // Action type constants
+        ACTION_START: 'start',
+        ACTION_PARTIAL: 'partial',
+        ACTION_START2: 'start2',
+        ACTION_STOP: 'stop',
+
+        // Icon/color defaults per action
+        ICONS: {
+            start: 'icon-play',
+            partial: 'icon-arrow-right',
+            start2: 'icon-play',
+            stop: 'icon-check+icon-share'
+        },
+        COLORS: {
+            start: '#128DBE',
+            partial: '#e67e22',
+            start2: '#2980b9',
+            stop: '#27ae60'
+        },
+
+        // Legacy aliases (backward compat)
         START_ICON: 'icon-play',
         START_COLOR: '#128DBE',
-        PARTIAL_ICON: 'icon-arrow-right',
-        PARTIAL_COLOR: '#e67e22',
-        START2_ICON: 'icon-play',
-        START2_COLOR: '#2980b9',
         STOP_ICON: 'icon-check+icon-share',
         STOP_COLOR: '#27ae60',
 
@@ -150,22 +167,18 @@
                 if (!resolved) return;
                 hasAny = true;
 
-                var iconMap = { start: QA.START_ICON, partial: QA.PARTIAL_ICON, start2: QA.START2_ICON, stop: QA.STOP_ICON };
-                var colorMap = {
-                    start: resolved.startColor || QA.START_COLOR,
-                    partial: QA.PARTIAL_COLOR,
-                    start2: QA.START2_COLOR,
-                    stop: resolved.stopColor || QA.STOP_COLOR
+                var icon = QA.ICONS[resolved.action];
+                var color = (resolved.action === 'start' && resolved.startColor)
+                    ? resolved.startColor
+                    : (resolved.action === 'stop' && resolved.stopColor)
+                        ? resolved.stopColor
+                        : QA.COLORS[resolved.action];
+                var labelDefaults = {
+                    start: QA.i18n.start, partial: QA.i18n.partialReady,
+                    start2: QA.i18n.startStep2, stop: QA.i18n.done
                 };
-                var labelMap = {
-                    start:   resolved.labels.start || QA.i18n.start,
-                    partial: resolved.labels.partial || QA.i18n.partialReady,
-                    start2:  resolved.labels.start2 || QA.i18n.startStep2,
-                    stop:    resolved.labels.finish || resolved.labels.stop || QA.i18n.done
-                };
-                var icon = iconMap[resolved.action];
-                var color = colorMap[resolved.action];
-                var label = labelMap[resolved.action];
+                var label = (resolved.labels && resolved.labels[resolved.action])
+                    || labelDefaults[resolved.action];
 
                 var $link = $('<a href="#"></a>')
                     .addClass('qa-inline-btn')

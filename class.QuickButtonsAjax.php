@@ -16,6 +16,25 @@ require_once INCLUDE_DIR . 'class.plugin.php';
 
 class QuickButtonsAjax extends AjaxController {
 
+    // Action type constants
+    const ACTION_START   = 'start';
+    const ACTION_STOP    = 'stop';
+    const ACTION_PARTIAL = 'partial';
+    const ACTION_START2  = 'start2';
+
+    const VALID_ACTIONS = array(
+        self::ACTION_START, self::ACTION_STOP,
+        self::ACTION_PARTIAL, self::ACTION_START2,
+    );
+
+    // Variant constants
+    const VARIANT_SINGLE  = 'single';
+    const VARIANT_TWOSTEP = 'twostep';
+
+    // osTicket thread event IDs
+    const EVENT_STATUS_CHANGE = 9;
+    const EVENT_CLAIM         = 4;
+
     private static function choiceKey($value) {
         if (!$value) return $value;
         if (is_scalar($value)) {
@@ -344,7 +363,7 @@ class QuickButtonsAjax extends AjaxController {
                 if (empty($deptCfg['enabled'])) continue;
                 if (!in_array($deptId, $agentDepts)) continue;
 
-                $variant = $deptCfg['variant'] ?? 'single';
+                $variant = $deptCfg['variant'] ?? self::VARIANT_SINGLE;
                 $deptConfigs[$deptId] = array(
                     'start_trigger'     => (string) ($deptCfg['start_trigger_status'] ?? ''),
                     'start_target'      => (string) ($deptCfg['start_target_status'] ?? ''),
@@ -477,7 +496,7 @@ class QuickButtonsAjax extends AjaxController {
         if (!$widgetId)
             Http::response(400, $this->json_encode(
                 array('error' => __('Invalid widget'))));
-        if (!in_array($action, array('start', 'stop', 'partial', 'start2')))
+        if (!in_array($action, self::VALID_ACTIONS))
             Http::response(400, $this->json_encode(
                 array('error' => __('Invalid action type'))));
         if (!$tids || !is_array($tids) || !count($tids))
@@ -516,42 +535,43 @@ class QuickButtonsAjax extends AjaxController {
                 array('error' => __('Access Denied'))));
 
         // Resolve targets based on action type
-        $variant = $deptCfg['variant'] ?? 'single';
+        $variant = $deptCfg['variant'] ?? self::VARIANT_SINGLE;
 
         // Reject two-step actions on single-step configs
-        if (in_array($action, array('partial', 'start2')) && $variant !== 'twostep')
+        if (in_array($action, array(self::ACTION_PARTIAL, self::ACTION_START2))
+                && $variant !== self::VARIANT_TWOSTEP)
             Http::response(400, $this->json_encode(
                 array('error' => __('Two-step actions require two-step variant'))));
 
         switch ($action) {
-            case 'start':
+            case self::ACTION_START:
                 $targetStatusId = $deptCfg['start_target_status'] ?? null;
                 $shouldClaim = true;
                 $shouldRelease = false;
                 $transferDept = null;
                 $clearTeam = false;
                 break;
-            case 'partial':
+            case self::ACTION_PARTIAL:
                 $targetStatusId = $deptCfg['step2_trigger_status'] ?? null;
                 $shouldClaim = false;
                 $shouldRelease = true;
-                $transferDept = null; // NO transfer on partial
+                $transferDept = null;
                 $clearTeam = false;
                 break;
-            case 'start2':
+            case self::ACTION_START2:
                 $targetStatusId = $deptCfg['step2_target_status'] ?? null;
                 $shouldClaim = true;
                 $shouldRelease = false;
                 $transferDept = null;
                 $clearTeam = false;
                 break;
-            case 'stop':
-                $targetStatusId = ($variant === 'twostep')
+            case self::ACTION_STOP:
+                $targetStatusId = ($variant === self::VARIANT_TWOSTEP)
                     ? ($deptCfg['step2_stop_target_status'] ?? null)
                     : ($deptCfg['stop_target_status'] ?? null);
                 $shouldClaim = false;
                 $shouldRelease = true;
-                $clearTeam = ($variant === 'twostep')
+                $clearTeam = ($variant === self::VARIANT_TWOSTEP)
                     ? !empty($deptCfg['step2_clear_team'])
                     : !empty($deptCfg['clear_team']);
                 // Transfer on stop
@@ -603,7 +623,12 @@ class QuickButtonsAjax extends AjaxController {
             if ($shouldClaim) {
                 $ok = $this->doStart($ticket, $thisstaff, $targetStatus, $ticketNum, $errors_list);
             } else {
-                $ok = $this->doStop($ticket, $thisstaff, $targetStatus, $transferDept, $clearTeam, $ticketNum, $errors_list);
+                $ok = $this->doStop($ticket, $thisstaff, array(
+                    'targetStatus' => $targetStatus,
+                    'transferDept' => $transferDept,
+                    'clearTeam'    => $clearTeam,
+                    'ticketNum'    => $ticketNum,
+                ), $errors_list);
             }
 
             if ($ok) {
@@ -835,22 +860,6 @@ class QuickButtonsAjax extends AjaxController {
             $staffFilter = ' AND (tk.staff_id = ' . (int) $thisstaff->getId() . ')';
         }
 
-        // Get all Quick Buttons widget statuses for filtering
-        $plugin = self::findPlugin();
-        $statusIds = array();
-        if ($plugin) {
-            foreach ($plugin->getActiveInstances() as $instance) {
-                $config = $instance->getConfig();
-                if (!$config) continue;
-                $data = self::parseWidgetConfig($config);
-                foreach (($data['departments'] ?? array()) as $deptCfg) {
-                    if (empty($deptCfg['enabled'])) continue;
-                    foreach (array('start_trigger_status','start_target_status','stop_target_status') as $f)
-                        if (!empty($deptCfg[$f])) $statusIds[$deptCfg[$f]] = true;
-                }
-            }
-        }
-
         // 1. Tickets processed per day (status change events)
         // Use weekly rollup if range > 60 days
         $groupExpr = $days > 60 ? "DATE_FORMAT(e.timestamp, '%Y-W%v')" : "DATE(e.timestamp)";
@@ -859,7 +868,7 @@ class QuickButtonsAjax extends AjaxController {
              FROM ost_thread_event e
              JOIN ost_thread t ON e.thread_id = t.id AND t.object_type = 'T'
              JOIN ost_ticket tk ON t.object_id = tk.ticket_id
-             WHERE e.event_id = 9 AND e.timestamp >= '{$since}'
+             WHERE e.event_id = " . self::EVENT_STATUS_CHANGE . " AND e.timestamp >= '{$since}'
                AND e.timestamp <= '{$until}'
                AND e.data LIKE '%\"status\"%'
                {$deptFilter} {$staffFilter}
@@ -876,7 +885,7 @@ class QuickButtonsAjax extends AjaxController {
              FROM ost_thread_event e
              JOIN ost_thread t ON e.thread_id = t.id AND t.object_type = 'T'
              JOIN ost_ticket tk ON t.object_id = tk.ticket_id
-             WHERE e.event_id = 9 AND e.timestamp >= '{$since}'
+             WHERE e.event_id = " . self::EVENT_STATUS_CHANGE . " AND e.timestamp >= '{$since}'
                AND e.timestamp <= '{$until}'
                AND e.data LIKE '%\"status\"%'
                {$deptFilter} {$staffFilter}
@@ -929,7 +938,7 @@ class QuickButtonsAjax extends AjaxController {
              JOIN ost_thread t ON e.thread_id = t.id AND t.object_type = 'T'
              JOIN ost_ticket tk ON t.object_id = tk.ticket_id
              LEFT JOIN ost_staff s ON e.staff_id = s.staff_id
-             WHERE e.event_id = 4 AND e.timestamp >= '{$since}'
+             WHERE e.event_id = " . self::EVENT_CLAIM . " AND e.timestamp >= '{$since}'
                AND e.timestamp <= '{$until}'
                {$deptFilter} {$agentLimit}
              GROUP BY e.staff_id
@@ -943,21 +952,13 @@ class QuickButtonsAjax extends AjaxController {
                     'count' => (int) $row['cnt'],
                 );
 
-        // 4. Current queue snapshot (filtered by dept access)
-        $queueDeptFilter = '';
-        $queueStaffFilter = '';
-        if (!$thisstaff->isAdmin() && $accessDepts) {
-            $queueDeptFilter = ' AND tk.dept_id IN (' . implode(',', array_map('intval', $accessDepts)) . ')';
-        }
-        if ($isLimited) {
-            $queueStaffFilter = ' AND tk.staff_id = ' . (int) $thisstaff->getId();
-        }
+        // 4. Current queue snapshot (reuse existing dept/staff filters)
         $queueRes = db_query(
             "SELECT s.id, s.name, COUNT(*) as cnt
              FROM ost_ticket tk
              JOIN ost_ticket_status s ON tk.status_id = s.id
              WHERE s.state = 'open'
-               {$queueDeptFilter} {$queueStaffFilter}
+               {$deptFilter} {$staffFilter}
              GROUP BY s.id
              ORDER BY s.sort");
         $queue = array();
@@ -977,13 +978,8 @@ class QuickButtonsAjax extends AjaxController {
             $cfAgentFilter = $isLimited
                 ? ' AND l.staff_id = ' . (int) $thisstaff->getId()
                 : '';
-            // Dept filter: join ticket table to respect department access
-            $cfDeptJoin = '';
-            $cfDeptFilter = '';
-            if (!$thisstaff->isAdmin() && $accessDepts) {
-                $cfDeptJoin = " JOIN {$prefix}ticket tk ON l.ticket_id = tk.ticket_id";
-                $cfDeptFilter = ' AND tk.dept_id IN (' . implode(',', array_map('intval', $accessDepts)) . ')';
-            }
+            $cfDeptJoin = $deptFilter ? " JOIN {$prefix}ticket tk ON l.ticket_id = tk.ticket_id" : '';
+            $cfDeptFilter = $deptFilter; // Reuse existing dept filter (same tk alias)
             $cfRes = db_query(
                 "SELECT l.staff_id, s.firstname, s.lastname,
                         SUM(l.field_value) AS total,
@@ -1030,37 +1026,8 @@ class QuickButtonsAjax extends AjaxController {
                 'totalQueue'     => $totalQueue,
                 'activeAgents'   => $activeAgents,
             ),
-            'i18n'     => array(
-                'dashboard'      => __('Workflow Dashboard'),
-                'ticketsPerDay'  => __('Tickets Processed Per Day'),
-                'ticketsPerWeek' => __('Tickets Processed Per Week'),
-                'avgTimePerStep' => __('Average Time Per Step'),
-                'agentLeader'    => __('Agent Leaderboard'),
-                'myPerformance'  => __('My Performance'),
-                'currentQueue'   => __('Current Queue'),
-                'fieldValues'    => __('Field Values'),
-                'status'         => __('Status'),
-                'avgTime'        => __('Avg Time'),
-                'transitions'    => __('Transitions'),
-                'agent'          => __('Agent'),
-                'claimed'        => __('Claimed'),
-                'tickets'        => __('Tickets'),
-                'totalValue'     => __('Total'),
-                'ticketCount'    => __('Tickets'),
-                'average'        => __('Average'),
-                'total'          => __('Total'),
-                'last7days'      => __('Last 7 Days'),
-                'last30days'     => __('Last 30 Days'),
-                'last90days'     => __('Last 90 Days'),
-                'customRange'    => __('Custom Range'),
-                'totalProcessed' => __('Total Processed'),
-                'avgPerDay'      => __('Avg / Day'),
-                'openTickets'    => __('Open Tickets'),
-                'activeAgents'   => __('Active Agents'),
-                'from'           => __('From'),
-                'to'             => __('To'),
-                'apply'          => __('Apply'),
-            ),
+            // i18n is already embedded in the page HTML via WD_DATA.i18n
+            // No need to send it on every data refresh
         ));
     }
 
@@ -1102,7 +1069,14 @@ class QuickButtonsAjax extends AjaxController {
         return true;
     }
 
-    private function doStop($ticket, $thisstaff, $targetStatus, $transferDept, $clearTeam, $ticketNum, &$errors_list) {
+    /**
+     * @param array $ctx Keys: targetStatus, transferDept, clearTeam, ticketNum
+     */
+    private function doStop($ticket, $thisstaff, $ctx, &$errors_list) {
+        $targetStatus = $ctx['targetStatus'] ?? null;
+        $transferDept = $ctx['transferDept'] ?? null;
+        $clearTeam    = $ctx['clearTeam'] ?? false;
+        $ticketNum    = $ctx['ticketNum'] ?? '';
         // 1. Change status
         if ($targetStatus) {
             $result = $this->actionChangeStatus($ticket, $targetStatus, $thisstaff);
