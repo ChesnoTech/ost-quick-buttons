@@ -29,7 +29,7 @@
 
         START_ICON: 'icon-play',
         START_COLOR: '#128DBE',
-        PARTIAL_ICON: 'icon-check',
+        PARTIAL_ICON: 'icon-arrow-right',
         PARTIAL_COLOR: '#e67e22',
         START2_ICON: 'icon-play',
         START2_COLOR: '#2980b9',
