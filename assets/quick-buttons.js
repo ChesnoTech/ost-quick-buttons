@@ -374,7 +374,7 @@
             var action = $btn.data('action');
             var deptId = $btn.data('dept-id');
             var ticketId = $btn.data('ticket-id');
-            var confirmMode = $btn.data('confirm-mode') || 'none';
+            var confirmMode = $btn.data('confirmMode') || 'none';
             var countdownSec = parseInt($btn.data('countdown'), 10) || 5;
 
             if (!widgetId || !action || !ticketId) return false;
@@ -465,28 +465,37 @@
         // ================================================================
 
         showCountdown: function($btn, ticketNum, action, seconds, onExecute) {
-            // Remove any existing countdown popup
             $('.qa-countdown-popup').remove();
+            $(document).off('click.qa-countdown');
 
             var remaining = seconds;
             var cancelled = false;
-            var icon = action === 'start' ? QA.START_ICON : QA.STOP_ICON;
             var color = action === 'start' ? QA.START_COLOR : QA.STOP_COLOR;
-            var title = (action === 'start' ? '▶ ' + QA.i18n.start : '✓ ' + QA.i18n.done) +
-                        ' — Ticket #' + QA.escapeHtml(ticketNum);
+            var title = '#' + QA.escapeHtml(ticketNum);
             var desc = action === 'start' ? QA.i18n.countdownStart : QA.i18n.countdownStop;
 
+            // SVG circular ring (r=16, circumference=2*pi*16=100.53)
+            var circumference = 100.53;
+            var ringHTML =
+                '<div class="qa-cd-ring">' +
+                '<svg viewBox="0 0 40 40">' +
+                '<circle class="qa-cd-ring-bg" cx="20" cy="20" r="16"/>' +
+                '<circle class="qa-cd-ring-fill" cx="20" cy="20" r="16" ' +
+                'stroke="' + color + '" style="stroke-dasharray:' + circumference +
+                '; stroke-dashoffset:0; transition: stroke-dashoffset ' + seconds + 's linear"/>' +
+                '</svg>' +
+                '<span class="qa-cd-ring-number">' + remaining + '</span>' +
+                '</div>';
+
             var $popup = $('<div class="qa-countdown-popup"></div>');
+            var $ring = $(ringHTML);
+            var $content = $('<div class="qa-cd-content"></div>');
             var $title = $('<div class="qa-cd-title"></div>').text(title);
             var $desc = $('<div class="qa-cd-desc"></div>').text(desc);
-            var $timer = $('<div class="qa-cd-timer"></div>');
-            var $timerText = $('<span class="qa-cd-timer-text"></span>');
             var $cancelBtn = $('<button class="qa-cd-cancel"></button>').text(QA.i18n.cancel);
-            var $bar = $('<div class="qa-cd-bar"><div class="qa-cd-bar-fill"></div></div>');
 
-            $timer.append($timerText).append($cancelBtn);
-            $popup.append($title).append($desc).append($timer).append($bar);
-            $popup.css('border-left-color', color);
+            $content.append($title).append($desc).append($cancelBtn);
+            $popup.append($ring).append($content);
 
             // Position near the button
             var btnRect = $btn[0].getBoundingClientRect();
@@ -500,25 +509,13 @@
 
             $('body').append($popup);
 
-            // Animate progress bar
-            var $fill = $popup.find('.qa-cd-bar-fill');
-            $fill.css({ width: '100%', backgroundColor: color });
-
-            // Update timer text
-            var updateTimer = function() {
-                $timerText.text(QA.i18n.executingIn.replace('%s', remaining));
-            };
-            updateTimer();
-
-            // Start CSS transition for progress bar
+            // Start ring animation
             requestAnimationFrame(function() {
-                $fill.css({
-                    transition: 'width ' + seconds + 's linear',
-                    width: '0%'
-                });
+                $popup.find('.qa-cd-ring-fill').css('stroke-dashoffset', circumference);
             });
 
             // Countdown interval
+            var $number = $popup.find('.qa-cd-ring-number');
             var intervalId = setInterval(function() {
                 remaining--;
                 if (remaining <= 0) {
@@ -528,16 +525,17 @@
                         onExecute();
                     }
                 } else {
-                    updateTimer();
+                    $number.text(remaining);
                 }
             }, 1000);
 
             // Cancel button
-            $cancelBtn.on('click', function() {
+            $cancelBtn.on('click', function(e) {
+                e.stopPropagation();
                 cancelled = true;
                 clearInterval(intervalId);
                 $popup.addClass('qa-cd-cancelled');
-                setTimeout(function() { $popup.remove(); }, 300);
+                setTimeout(function() { $popup.remove(); }, 250);
             });
 
             // Click outside to cancel

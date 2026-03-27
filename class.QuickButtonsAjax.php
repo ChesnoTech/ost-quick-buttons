@@ -354,7 +354,7 @@ class QuickButtonsAjax extends AjaxController {
             // Handle legacy BooleanField migration (1 = confirm, '' = none)
             if ($confirmMode === '1') $confirmMode = 'confirm';
             if ($confirmMode === '' || $confirmMode === '0') $confirmMode = 'none';
-            $countdownSec = max(3, min(10, (int) ($config->get('countdown_seconds') ?: 5)));
+            $countdownSec = max(3, min(30, (int) ($config->get('countdown_seconds') ?: 5)));
 
             $widgets[] = array(
                 'id'             => $instance->getId(),
@@ -695,18 +695,13 @@ class QuickButtonsAjax extends AjaxController {
                 'totalProcessed'    => __('Total Processed'),
                 'days'              => __('days'),
                 'dailyThroughput'   => __('Daily Throughput'),
-                'weeklyThroughput'  => __('Weekly Throughput'),
                 'avgTimePerStep'    => __('Average Time Per Step'),
                 'status'            => __('Status'),
                 'avgTime'           => __('Avg Time'),
                 'transitions'       => __('Transitions'),
                 'agentLeaderboard'  => __('Agent Leaderboard'),
-                'myPerformance'     => __('My Performance'),
                 'currentQueue'      => __('Current Queue'),
-                'myQueue'           => __('My Assigned Tickets'),
-                'claimed'           => __('Claimed'),
                 'noData'            => __('No data for this period'),
-                'apply'             => __('Apply'),
             ),
         );
 
@@ -741,56 +736,90 @@ class QuickButtonsAjax extends AjaxController {
      * GET /quick-buttons/dashboard
      *
      * Returns workflow metrics: throughput, avg time per step, agent stats.
-     * Query params: days (default 30), OR from/to (YYYY-MM-DD)
+     * Query params: days (default 7)
      */
     function dashboard() {
-        $thisstaff = $this->requireStaff();
+        $this->requireStaff();
+        global $thisstaff;
 
-        // Support custom date range (from/to) or quick period (days)
-        $from = $_GET['from'] ?? '';
-        $to   = $_GET['to'] ?? '';
-
-        if ($from && $to && preg_match('/^\d{4}-\d{2}-\d{2}$/', $from)
-                         && preg_match('/^\d{4}-\d{2}-\d{2}$/', $to)) {
-            $since = db_input($from) . ' 00:00:00';
-            $until = db_input($to) . ' 23:59:59';
-            $days  = max(1, (int) ((strtotime($to) - strtotime($from)) / 86400));
+        // Date range: support both ?days=N and ?from=YYYY-MM-DD&to=YYYY-MM-DD
+        $from = $_GET['from'] ?? null;
+        $to   = $_GET['to'] ?? null;
+        if ($from && $to) {
+            $from = date('Y-m-d', strtotime($from));
+            $to   = date('Y-m-d', strtotime($to));
+            if ($from > $to) { $tmp = $from; $from = $to; $to = $tmp; }
+            $since = $from . ' 00:00:00';
+            $until = $to . ' 23:59:59';
+            $days = (int) ((strtotime($to) - strtotime($from)) / 86400) + 1;
         } else {
-            $days  = max(1, min(365, (int) ($_GET['days'] ?? 30)));
+            $days = max(1, min(365, (int) ($_GET['days'] ?? 7)));
             $since = date('Y-m-d H:i:s', strtotime("-{$days} days"));
             $until = date('Y-m-d H:i:s');
+            $from = date('Y-m-d', strtotime($since));
+            $to = date('Y-m-d');
         }
 
-        // Access control: match osTicket's built-in visibility rules
-        // See Staff::getTicketsVisibility() in class.staff.php
-        $visibilityWhere = self::buildVisibilitySQL($thisstaff);
+        // Access control: filter by agent's accessible departments
+        $deptFilter = '';
+        $isLimited = $thisstaff->isAccessLimited();
+        $accessDepts = $thisstaff->getDepts();
+        if (!$thisstaff->isAdmin() && $accessDepts) {
+            $deptIds = array_map('intval', $accessDepts);
+            $deptFilter = ' AND tk.dept_id IN (' . implode(',', $deptIds) . ')';
+        }
+        // If access-limited, also filter by staff assignment
+        $staffFilter = '';
+        if ($isLimited) {
+            $staffFilter = ' AND (tk.staff_id = ' . (int) $thisstaff->getId() . ')';
+        }
 
-        // 1. Tickets processed per day — filtered by dept
+        // Get all Quick Buttons widget statuses for filtering
+        $plugin = self::findPlugin();
+        $statusIds = array();
+        if ($plugin) {
+            foreach ($plugin->getActiveInstances() as $instance) {
+                $config = $instance->getConfig();
+                if (!$config) continue;
+                $data = self::parseWidgetConfig($config);
+                foreach (($data['departments'] ?? array()) as $deptCfg) {
+                    if (empty($deptCfg['enabled'])) continue;
+                    foreach (array('start_trigger_status','start_target_status','stop_target_status') as $f)
+                        if (!empty($deptCfg[$f])) $statusIds[$deptCfg[$f]] = true;
+                }
+            }
+        }
+
+        // 1. Tickets processed per day (status change events)
+        // Use weekly rollup if range > 60 days
+        $groupExpr = $days > 60 ? "DATE_FORMAT(e.timestamp, '%Y-W%v')" : "DATE(e.timestamp)";
         $dailyRes = db_query(
-            "SELECT DATE(e.timestamp) as day, COUNT(*) as cnt
+            "SELECT {$groupExpr} as day, COUNT(*) as cnt
              FROM ost_thread_event e
-             JOIN ost_thread th ON e.thread_id = th.id AND th.object_type = 'T'
-             JOIN ost_ticket tk ON th.object_id = tk.ticket_id
-             WHERE e.event_id = 9 AND e.timestamp >= '{$since}' AND e.timestamp <= '{$until}'
+             JOIN ost_thread t ON e.thread_id = t.id AND t.object_type = 'T'
+             JOIN ost_ticket tk ON t.object_id = tk.ticket_id
+             WHERE e.event_id = 9 AND e.timestamp >= '{$since}'
+               AND e.timestamp <= '{$until}'
                AND e.data LIKE '%\"status\"%'
-               AND ({$visibilityWhere})
-             GROUP BY DATE(e.timestamp)
+               {$deptFilter} {$staffFilter}
+             GROUP BY day
              ORDER BY day");
         $daily = array();
         if ($dailyRes)
             while ($row = db_fetch_array($dailyRes))
                 $daily[] = array('day' => $row['day'], 'count' => (int) $row['cnt']);
 
-        // 2. Average time per step — filtered by dept
+        // 2. Average time per step (time between consecutive status changes per ticket)
         $stepTimesRes = db_query(
-            "SELECT th.object_id as ticket_id, e.data, e.timestamp
+            "SELECT t.object_id as ticket_id, e.data, e.timestamp
              FROM ost_thread_event e
-             JOIN ost_thread th ON e.thread_id = th.id AND th.object_type = 'T'
-             JOIN ost_ticket tk ON th.object_id = tk.ticket_id
-             WHERE e.event_id = 9 AND e.timestamp >= '{$since}' AND e.timestamp <= '{$until}'
+             JOIN ost_thread t ON e.thread_id = t.id AND t.object_type = 'T'
+             JOIN ost_ticket tk ON t.object_id = tk.ticket_id
+             WHERE e.event_id = 9 AND e.timestamp >= '{$since}'
+               AND e.timestamp <= '{$until}'
                AND e.data LIKE '%\"status\"%'
-               AND ({$visibilityWhere})
-             ORDER BY th.object_id, e.timestamp");
+               {$deptFilter} {$staffFilter}
+             ORDER BY t.object_id, e.timestamp");
         $stepDurations = array();
         $prevByTicket = array();
         if ($stepTimesRes) {
@@ -813,6 +842,7 @@ class QuickButtonsAjax extends AjaxController {
             }
         }
 
+        // Build avg times with status names
         $avgTimes = array();
         foreach ($stepDurations as $statusId => $data) {
             $status = TicketStatus::lookup($statusId);
@@ -826,15 +856,21 @@ class QuickButtonsAjax extends AjaxController {
             );
         }
 
-        // 3. Agent leaderboard — only agents in accessible depts
+        // 3. Agent leaderboard (claims in period)
+        // Access-limited agents only see their own stats
+        $agentLimit = '';
+        if ($isLimited) {
+            $agentLimit = ' AND e.staff_id = ' . (int) $thisstaff->getId();
+        }
         $agentRes = db_query(
             "SELECT e.staff_id, s.firstname, s.lastname, COUNT(*) as cnt
              FROM ost_thread_event e
-             JOIN ost_thread th ON e.thread_id = th.id AND th.object_type = 'T'
-             JOIN ost_ticket tk ON th.object_id = tk.ticket_id
+             JOIN ost_thread t ON e.thread_id = t.id AND t.object_type = 'T'
+             JOIN ost_ticket tk ON t.object_id = tk.ticket_id
              LEFT JOIN ost_staff s ON e.staff_id = s.staff_id
-             WHERE e.event_id = 4 AND e.timestamp >= '{$since}' AND e.timestamp <= '{$until}'
-               AND ({$visibilityWhere})
+             WHERE e.event_id = 4 AND e.timestamp >= '{$since}'
+               AND e.timestamp <= '{$until}'
+               {$deptFilter} {$agentLimit}
              GROUP BY e.staff_id
              ORDER BY cnt DESC
              LIMIT 20");
@@ -846,13 +882,21 @@ class QuickButtonsAjax extends AjaxController {
                     'count' => (int) $row['cnt'],
                 );
 
-        // 4. Current queue — only tickets in accessible depts
+        // 4. Current queue snapshot (filtered by dept access)
+        $queueDeptFilter = '';
+        $queueStaffFilter = '';
+        if (!$thisstaff->isAdmin() && $accessDepts) {
+            $queueDeptFilter = ' AND tk.dept_id IN (' . implode(',', array_map('intval', $accessDepts)) . ')';
+        }
+        if ($isLimited) {
+            $queueStaffFilter = ' AND tk.staff_id = ' . (int) $thisstaff->getId();
+        }
         $queueRes = db_query(
             "SELECT s.id, s.name, COUNT(*) as cnt
              FROM ost_ticket tk
              JOIN ost_ticket_status s ON tk.status_id = s.id
              WHERE s.state = 'open'
-               AND ({$visibilityWhere})
+               {$queueDeptFilter} {$queueStaffFilter}
              GROUP BY s.id
              ORDER BY s.sort");
         $queue = array();
@@ -864,27 +908,36 @@ class QuickButtonsAjax extends AjaxController {
                     'count'      => (int) $row['cnt'],
                 );
 
-        // Access mode flag — tells JS how to render
-        $accessMode = 'full'; // admin or normal agent
-        if ($thisstaff->isAccessLimited())
-            $accessMode = 'limited'; // assigned_only agent
+        // KPI summaries
+        $totalProcessed = array_sum(array_column($daily, 'count'));
+        $avgPerDay = $days > 0 ? round($totalProcessed / $days, 1) : 0;
+        $totalQueue = array_sum(array_column($queue, 'count'));
+        $activeAgents = count($agents);
 
         return $this->json_encode(array(
-            'days'       => $days,
-            'daily'      => $daily,
-            'avgTimes'   => $avgTimes,
-            'agents'     => $agents,
-            'queue'      => $queue,
-            'accessMode' => $accessMode,
-            'staffName'  => $thisstaff->getName()->getOriginal(),
-            'i18n'       => array(
+            'days'     => $days,
+            'from'     => $from,
+            'to'       => $to,
+            'weekly'   => $days > 60,
+            'daily'    => $daily,
+            'avgTimes' => $avgTimes,
+            'agents'   => $agents,
+            'queue'    => $queue,
+            'isLimited'=> $isLimited,
+            'kpi'      => array(
+                'totalProcessed' => $totalProcessed,
+                'avgPerDay'      => $avgPerDay,
+                'totalQueue'     => $totalQueue,
+                'activeAgents'   => $activeAgents,
+            ),
+            'i18n'     => array(
                 'dashboard'      => __('Workflow Dashboard'),
                 'ticketsPerDay'  => __('Tickets Processed Per Day'),
+                'ticketsPerWeek' => __('Tickets Processed Per Week'),
                 'avgTimePerStep' => __('Average Time Per Step'),
                 'agentLeader'    => __('Agent Leaderboard'),
                 'myPerformance'  => __('My Performance'),
                 'currentQueue'   => __('Current Queue'),
-                'myQueue'        => __('My Assigned Tickets'),
                 'status'         => __('Status'),
                 'avgTime'        => __('Avg Time'),
                 'transitions'    => __('Transitions'),
@@ -894,43 +947,16 @@ class QuickButtonsAjax extends AjaxController {
                 'last7days'      => __('Last 7 Days'),
                 'last30days'     => __('Last 30 Days'),
                 'last90days'     => __('Last 90 Days'),
+                'customRange'    => __('Custom Range'),
+                'totalProcessed' => __('Total Processed'),
+                'avgPerDay'      => __('Avg / Day'),
+                'openTickets'    => __('Open Tickets'),
+                'activeAgents'   => __('Active Agents'),
+                'from'           => __('From'),
+                'to'             => __('To'),
+                'apply'          => __('Apply'),
             ),
         ));
-    }
-
-    /**
-     * Build SQL WHERE clause matching osTicket's Staff::getTicketsVisibility()
-     *
-     * Replicates the ORM logic from class.staff.php in raw SQL:
-     * - If access-limited (assigned_only): only assigned tickets
-     * - Otherwise: dept-accessible tickets + assigned tickets + team tickets
-     *
-     * Expects the ticket table aliased as `tk` in the outer query.
-     */
-    private static function buildVisibilitySQL($staff) {
-        $staffId = (int) $staff->getId();
-        $conditions = array();
-
-        // Always include tickets assigned to this agent
-        $conditions[] = "tk.staff_id = {$staffId}";
-
-        // Include tickets assigned to agent's teams
-        $teams = array_filter($staff->getTeams());
-        if ($teams) {
-            $teamIn = implode(',', array_map('intval', $teams));
-            $conditions[] = "tk.team_id IN ({$teamIn})";
-        }
-
-        // If NOT access-limited, also include all tickets in accessible depts
-        if (!$staff->isAccessLimited()) {
-            $depts = $staff->getDepts();
-            if ($depts && count($depts)) {
-                $deptIn = implode(',', array_map('intval', $depts));
-                $conditions[] = "tk.dept_id IN ({$deptIn})";
-            }
-        }
-
-        return implode(' OR ', $conditions);
     }
 
     private static function formatDuration($totalSec) {

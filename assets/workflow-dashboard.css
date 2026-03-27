@@ -17,6 +17,7 @@ body {
 }
 .wd-header h1 { margin: 0; font-size: 22px; font-weight: 600; }
 .wd-header-sub { font-size: 13px; color: rgba(255,255,255,0.6); margin-top: 2px; }
+.wd-controls { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
 .wd-period-btns { display: flex; gap: 6px; }
 .wd-period-btn {
     padding: 6px 16px; border: 1px solid rgba(255,255,255,0.25); border-radius: 20px;
@@ -29,27 +30,22 @@ body {
     border-color: rgba(255,255,255,0.5);
 }
 
-/* Controls row */
-.wd-controls {
-    display: flex; flex-direction: column; gap: 8px; align-items: flex-end;
-}
-.wd-date-range {
-    display: flex; align-items: center; gap: 6px;
-}
+/* Date range picker */
+.wd-date-range { display: flex; align-items: center; gap: 6px; }
 .wd-date-input {
-    padding: 5px 10px; border: 1px solid rgba(255,255,255,0.25); border-radius: 6px;
+    padding: 4px 10px; border: 1px solid rgba(255,255,255,0.25); border-radius: 6px;
     background: rgba(255,255,255,0.1); color: #fff; font-size: 12px;
-    cursor: pointer;
+    outline: none; font-family: inherit;
 }
-.wd-date-input:focus { outline: none; border-color: rgba(255,255,255,0.5); }
+.wd-date-input:focus { border-color: rgba(255,255,255,0.5); background: rgba(255,255,255,0.15); }
 .wd-date-input::-webkit-calendar-picker-indicator { filter: invert(1); cursor: pointer; }
 .wd-date-sep { color: rgba(255,255,255,0.4); font-size: 12px; }
-.wd-date-go {
-    padding: 5px 14px; border: 1px solid rgba(255,255,255,0.3); border-radius: 6px;
-    background: rgba(255,255,255,0.15); color: #fff; font-size: 12px;
-    cursor: pointer; transition: all 0.15s;
+.wd-apply-btn {
+    padding: 4px 14px; border: 1px solid rgba(255,255,255,0.3); border-radius: 6px;
+    background: rgba(18,141,190,0.3); color: #fff; font-size: 12px;
+    cursor: pointer; transition: all 0.15s; font-family: inherit;
 }
-.wd-date-go:hover { background: rgba(255,255,255,0.25); }
+.wd-apply-btn:hover { background: rgba(18,141,190,0.5); border-color: rgba(255,255,255,0.5); }
 
 /* KPI Cards Row */
 .wd-kpis {
@@ -151,6 +147,19 @@ body {
     border-radius: 12px; font-weight: 700; font-size: 13px;
 }
 
+/* My Performance (access-limited agents) */
+.wd-my-stats {
+    text-align: center; padding: 24px 0;
+}
+.wd-my-count {
+    font-size: 48px; font-weight: 700; color: #128DBE;
+    font-variant-numeric: tabular-nums; line-height: 1;
+}
+.wd-my-label {
+    font-size: 13px; color: #888; margin-top: 8px;
+    text-transform: uppercase; letter-spacing: 0.5px;
+}
+
 /* Loading */
 .wd-loading {
     text-align: center; padding: 60px; color: #999; font-size: 15px;
@@ -167,7 +176,9 @@ body {
 @media (max-width: 900px) {
     .wd-grid { grid-template-columns: 1fr; }
     .wd-kpis { grid-template-columns: repeat(2, 1fr); }
-    .wd-header { padding: 20px 16px; }
+    .wd-header { padding: 20px 16px; flex-direction: column; gap: 12px; align-items: stretch; }
+    .wd-controls { align-items: stretch; }
+    .wd-date-range { flex-wrap: wrap; }
     .wd-kpis, .wd-grid { padding-left: 16px; padding-right: 16px; }
 }
 @media (max-width: 480px) {
