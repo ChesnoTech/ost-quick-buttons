@@ -226,6 +226,18 @@ class QuickButtonsAjax extends AjaxController {
             'selectStatus'      => __('-- Select --'),
             'selectNone'        => __('-- None --'),
 
+            // Variant
+            'variant'           => __('Variant'),
+            'variantSingle'     => __('Single Step'),
+            'variantTwostep'    => __('Two Step'),
+            'step1'             => __('Step 1'),
+            'step2'             => __('Step 2'),
+            'step2Trigger'      => __('Step 2 Trigger'),
+            'step2Working'      => __('Step 2 Working'),
+            'finalDone'         => __('Final Done'),
+            'partialReady'      => __('Next'),
+            'startStep2'        => __('Start Step 2'),
+
             // Actions
             'copyTo'            => __('Copy to...'),
             'applyTemplate'     => __('Apply template...'),
@@ -240,6 +252,9 @@ class QuickButtonsAjax extends AjaxController {
             'triggerEqualsWorking' => __('Trigger and Working are the same status (Start button will do nothing visible)'),
             'doneEqualsTrigger' => __('Done status equals Trigger — this creates an infinite loop'),
             'workingEqualsDone' => __('Working and Done are the same status (Stop button will do nothing visible)'),
+            'step2TriggerRequired' => __('Step 2 trigger status is required'),
+            'step2WorkingRequired' => __('Step 2 working status is required'),
+            'finalDoneRequired' => __('Final done status is required'),
 
             // Footer
             'noUnsaved'         => __('No unsaved changes'),
@@ -333,20 +348,31 @@ class QuickButtonsAjax extends AjaxController {
                 if (empty($deptCfg['enabled'])) continue;
                 if (!in_array($deptId, $agentDepts)) continue;
 
+                $variant = $deptCfg['variant'] ?? 'single';
                 $deptConfigs[$deptId] = array(
-                    'start_trigger' => (string) ($deptCfg['start_trigger_status'] ?? ''),
-                    'start_target'  => (string) ($deptCfg['start_target_status'] ?? ''),
-                    'stop_target'   => (string) ($deptCfg['stop_target_status'] ?? ''),
-                    'stop_transfer' => (string) ($deptCfg['stop_transfer_dept'] ?? ''),
-                    'clear_team'    => !empty($deptCfg['clear_team']),
+                    'start_trigger'     => (string) ($deptCfg['start_trigger_status'] ?? ''),
+                    'start_target'      => (string) ($deptCfg['start_target_status'] ?? ''),
+                    'stop_target'       => (string) ($deptCfg['stop_target_status'] ?? ''),
+                    'stop_transfer'     => (string) ($deptCfg['stop_transfer_dept'] ?? ''),
+                    'clear_team'        => !empty($deptCfg['clear_team']),
+                    'variant'           => $variant,
+                    // Two-step fields
+                    'step2_trigger'     => (string) ($deptCfg['step2_trigger_status'] ?? ''),
+                    'step2_target'      => (string) ($deptCfg['step2_target_status'] ?? ''),
+                    'step2_stop_target' => (string) ($deptCfg['step2_stop_target_status'] ?? ''),
+                    'step2_clear_team'  => !empty($deptCfg['step2_clear_team']),
+                    // Per-department labels
+                    'start_label'       => $deptCfg['start_label'] ?? '',
+                    'stop_label'        => $deptCfg['stop_label'] ?? '',
+                    'partial_label'     => $deptCfg['partial_label'] ?? '',
+                    'start2_label'      => $deptCfg['start2_label'] ?? '',
+                    'finish_label'      => $deptCfg['finish_label'] ?? '',
                 );
             }
 
             if (empty($deptConfigs)) continue;
 
-            // Custom labels and colors
-            $startLabel = $config->get('start_label') ?: '';
-            $stopLabel  = $config->get('stop_label') ?: '';
+            // Colors (widget-level, shared across departments)
             $startColor = $config->get('start_color') ?: '';
             $stopColor  = $config->get('stop_color') ?: '';
             // Confirmation mode: none, confirm, countdown
@@ -357,15 +383,13 @@ class QuickButtonsAjax extends AjaxController {
             $countdownSec = max(3, min(30, (int) ($config->get('countdown_seconds') ?: 5)));
 
             $widgets[] = array(
-                'id'             => $instance->getId(),
-                'topic'          => $topicId,
-                'depts'          => $deptConfigs,
-                'startLabel'     => $startLabel,
-                'stopLabel'      => $stopLabel,
-                'startColor'     => $startColor,
-                'stopColor'      => $stopColor,
-                'confirm'        => $confirmMode !== 'none', // backward compat
-                'confirmMode'    => $confirmMode,
+                'id'               => $instance->getId(),
+                'topic'            => $topicId,
+                'depts'            => $deptConfigs,
+                'startColor'       => $startColor,
+                'stopColor'        => $stopColor,
+                'confirm'          => $confirmMode !== 'none',
+                'confirmMode'      => $confirmMode,
                 'countdownSeconds' => $countdownSec,
             );
         }
@@ -417,6 +441,12 @@ class QuickButtonsAjax extends AjaxController {
             'confirmStop'  => __('Complete and hand off ticket #%s?'),
             'countdownStart'    => __('Claim ticket and change status to working'),
             'countdownStop'     => __('Change status, release agent and transfer'),
+            'partialReady'      => __('Next'),
+            'startStep2'        => __('Start Step 2'),
+            'confirmPartial'    => __('Mark ticket #%s as partially ready?'),
+            'confirmStart2'     => __('Start step 2 on ticket #%s?'),
+            'countdownPartial'  => __('Release agent and mark partially ready'),
+            'countdownStart2'   => __('Claim ticket for step 2'),
             'executingIn'       => __('Executing in %ss...'),
             'undo'         => __('Undo'),
             'undoExpired'  => __('Undo expired'),
@@ -451,7 +481,7 @@ class QuickButtonsAjax extends AjaxController {
         if (!$widgetId)
             Http::response(400, $this->json_encode(
                 array('error' => __('Invalid widget'))));
-        if (!in_array($action, array('start', 'stop')))
+        if (!in_array($action, array('start', 'stop', 'partial', 'start2')))
             Http::response(400, $this->json_encode(
                 array('error' => __('Invalid action type'))));
         if (!$tids || !is_array($tids) || !count($tids))
@@ -489,10 +519,55 @@ class QuickButtonsAjax extends AjaxController {
             Http::response(403, $this->json_encode(
                 array('error' => __('Access Denied'))));
 
-        // Resolve targets
-        $targetStatusId = ($action === 'start')
-            ? ($deptCfg['start_target_status'] ?? null)
-            : ($deptCfg['stop_target_status'] ?? null);
+        // Resolve targets based on action type
+        $variant = $deptCfg['variant'] ?? 'single';
+
+        // Reject two-step actions on single-step configs
+        if (in_array($action, array('partial', 'start2')) && $variant !== 'twostep')
+            Http::response(400, $this->json_encode(
+                array('error' => __('Two-step actions require two-step variant'))));
+
+        switch ($action) {
+            case 'start':
+                $targetStatusId = $deptCfg['start_target_status'] ?? null;
+                $shouldClaim = true;
+                $shouldRelease = false;
+                $transferDept = null;
+                $clearTeam = false;
+                break;
+            case 'partial':
+                $targetStatusId = $deptCfg['step2_trigger_status'] ?? null;
+                $shouldClaim = false;
+                $shouldRelease = true;
+                $transferDept = null; // NO transfer on partial
+                $clearTeam = false;
+                break;
+            case 'start2':
+                $targetStatusId = $deptCfg['step2_target_status'] ?? null;
+                $shouldClaim = true;
+                $shouldRelease = false;
+                $transferDept = null;
+                $clearTeam = false;
+                break;
+            case 'stop':
+                $targetStatusId = ($variant === 'twostep')
+                    ? ($deptCfg['step2_stop_target_status'] ?? null)
+                    : ($deptCfg['stop_target_status'] ?? null);
+                $shouldClaim = false;
+                $shouldRelease = true;
+                $clearTeam = ($variant === 'twostep')
+                    ? !empty($deptCfg['step2_clear_team'])
+                    : !empty($deptCfg['clear_team']);
+                // Transfer on stop
+                $transferDept = null;
+                if (!empty($deptCfg['stop_transfer_dept'])) {
+                    $transferDept = Dept::lookup($deptCfg['stop_transfer_dept']);
+                    if (!$transferDept)
+                        Http::response(400, $this->json_encode(
+                            array('error' => __('Configured transfer department not found'))));
+                }
+                break;
+        }
 
         $targetStatus = null;
         if ($targetStatusId) {
@@ -501,16 +576,6 @@ class QuickButtonsAjax extends AjaxController {
                 Http::response(400, $this->json_encode(
                     array('error' => __('Configured target status not found'))));
         }
-
-        $transferDept = null;
-        if ($action === 'stop' && !empty($deptCfg['stop_transfer_dept'])) {
-            $transferDept = Dept::lookup($deptCfg['stop_transfer_dept']);
-            if (!$transferDept)
-                Http::response(400, $this->json_encode(
-                    array('error' => __('Configured transfer department not found'))));
-        }
-
-        $clearTeam = ($action === 'stop' && !empty($deptCfg['clear_team']));
 
         // Process tickets — capture undo state
         $success = 0;
@@ -539,7 +604,7 @@ class QuickButtonsAjax extends AjaxController {
                 'dept_id'   => $ticket->getDeptId(),
             );
 
-            if ($action === 'start') {
+            if ($shouldClaim) {
                 $ok = $this->doStart($ticket, $thisstaff, $targetStatus, $ticketNum, $errors_list);
             } else {
                 $ok = $this->doStop($ticket, $thisstaff, $targetStatus, $transferDept, $clearTeam, $ticketNum, $errors_list);

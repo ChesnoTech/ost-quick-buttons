@@ -127,6 +127,17 @@
                 '</label>' +
                 '</div>' +
                 '<div class="wb-card-body">' +
+                // Variant selector
+                '<div class="wb-variant-row">' +
+                '<span class="wb-variant-label">' + esc(t('variant') || 'Variant') + ':</span>' +
+                '<select class="wb-sel-variant">' +
+                '<option value="single"' + ((cfg.variant || 'single') === 'single' ? ' selected' : '') + '>' + esc(t('variantSingle') || 'Single Step') + '</option>' +
+                '<option value="twostep"' + (cfg.variant === 'twostep' ? ' selected' : '') + '>' + esc(t('variantTwostep') || 'Two Step') + '</option>' +
+                '</select>' +
+                '</div>' +
+                // Step 1 flow (always shown)
+                '<div class="wb-flow-section">' +
+                '<div class="wb-flow-step-label">' + esc(t('step1') || 'Step 1') + '</div>' +
                 '<div class="wb-flow">' +
                 '<div class="wb-flow-pill wb-pill-trigger">' +
                 '<span class="wb-flow-label">' + esc(t('trigger')) + '</span>' +
@@ -137,10 +148,45 @@
                 '<span class="wb-flow-label">' + esc(t('working')) + '</span>' +
                 '<select class="wb-sel-working">' + statusOptions(cfg.start_target_status || '') + '</select>' +
                 '</div>' +
-                '<div class="wb-flow-arrow wb-flow-arrow-stop">\u2714</div>' +
-                '<div class="wb-flow-pill wb-pill-done">' +
+                // Single-step: show done pill inline
+                '<div class="wb-flow-arrow wb-flow-arrow-stop wb-single-only">\u2714</div>' +
+                '<div class="wb-flow-pill wb-pill-done wb-single-only">' +
                 '<span class="wb-flow-label">' + esc(t('done')) + '</span>' +
                 '<select class="wb-sel-done">' + statusOptions(cfg.stop_target_status || '') + '</select>' +
+                '</div>' +
+                // Two-step: show partial arrow
+                '<div class="wb-flow-arrow wb-flow-arrow-partial wb-twostep-only">\u23E9</div>' +
+                '</div>' +
+                // Labels row for step 1
+                '<div class="wb-labels-row">' +
+                '<input type="text" class="wb-label-input wb-lbl-start" maxlength="12" placeholder="' + esc(t('start') || 'Start') + '" value="' + esc(cfg.start_label || '') + '">' +
+                '<input type="text" class="wb-label-input wb-lbl-partial wb-twostep-only" maxlength="12" placeholder="' + esc(t('partialReady') || 'Next') + '" value="' + esc(cfg.partial_label || '') + '">' +
+                '<input type="text" class="wb-label-input wb-lbl-stop wb-single-only" maxlength="12" placeholder="' + esc(t('done') || 'Done') + '" value="' + esc(cfg.stop_label || '') + '">' +
+                '</div>' +
+                '</div>' +
+                // Step 2 flow (only for two-step)
+                '<div class="wb-flow-section wb-twostep-only">' +
+                '<div class="wb-flow-step-label">' + esc(t('step2') || 'Step 2') + '</div>' +
+                '<div class="wb-flow">' +
+                '<div class="wb-flow-pill wb-pill-step2-trigger">' +
+                '<span class="wb-flow-label">' + esc(t('step2Trigger') || 'Step 2 Trigger') + '</span>' +
+                '<select class="wb-sel-step2-trigger">' + statusOptions(cfg.step2_trigger_status || '') + '</select>' +
+                '</div>' +
+                '<div class="wb-flow-arrow wb-flow-arrow-start2">\u25B6</div>' +
+                '<div class="wb-flow-pill wb-pill-step2-working">' +
+                '<span class="wb-flow-label">' + esc(t('step2Working') || 'Step 2 Working') + '</span>' +
+                '<select class="wb-sel-step2-working">' + statusOptions(cfg.step2_target_status || '') + '</select>' +
+                '</div>' +
+                '<div class="wb-flow-arrow wb-flow-arrow-stop">\u2714</div>' +
+                '<div class="wb-flow-pill wb-pill-final-done">' +
+                '<span class="wb-flow-label">' + esc(t('finalDone') || 'Final Done') + '</span>' +
+                '<select class="wb-sel-final-done">' + statusOptions(cfg.step2_stop_target_status || '') + '</select>' +
+                '</div>' +
+                '</div>' +
+                // Labels row for step 2
+                '<div class="wb-labels-row">' +
+                '<input type="text" class="wb-label-input wb-lbl-start2" maxlength="12" placeholder="' + esc(t('startStep2') || 'Start') + '" value="' + esc(cfg.start2_label || '') + '">' +
+                '<input type="text" class="wb-label-input wb-lbl-finish" maxlength="12" placeholder="' + esc(t('done') || 'Done') + '" value="' + esc(cfg.finish_label || '') + '">' +
                 '</div>' +
                 '</div>' +
                 '<div class="wb-validation"></div>' +
@@ -157,8 +203,7 @@
                 '<select class="wb-card-action-btn wb-template-sel" data-dept-id="' + dept.id + '">' +
                 '<option value="">' + esc(t('applyTemplate')) + '</option>' +
                 '<option value="single">' + esc(t('tplSingleStep')) + '</option>' +
-                '<option value="step1">' + esc(t('tplStep1')) + '</option>' +
-                '<option value="step2">' + esc(t('tplStep2')) + '</option>' +
+                '<option value="twostep">' + esc(t('variantTwostep') || 'Two Step') + '</option>' +
                 '</select>' +
                 '</div>' +
                 '</div>';
@@ -180,6 +225,11 @@
         app.appendChild(footer);
 
         bindEvents();
+
+        // Initialize variant visibility on all cards
+        document.querySelectorAll('.wb-card').forEach(function(card) {
+            updateVariantVisibility(card);
+        });
     }
 
     // ================================================================
@@ -236,8 +286,20 @@
                 updateBadge();
             }
 
+            if (e.target.classList.contains('wb-sel-variant')) {
+                updateVariantVisibility(card);
+            }
+
             if (e.target.classList.contains('wb-template-sel')) {
-                applyTemplate(card, e.target.value);
+                var tpl = e.target.value;
+                if (tpl === 'twostep') {
+                    card.querySelector('.wb-sel-variant').value = 'twostep';
+                    updateVariantVisibility(card);
+                } else if (tpl === 'single') {
+                    card.querySelector('.wb-sel-variant').value = 'single';
+                    updateVariantVisibility(card);
+                }
+                applyTemplate(card, tpl);
                 e.target.value = '';
             }
 
@@ -272,6 +334,18 @@
     function updateCard(card) {
         var enabled = card.querySelector('.wb-enabled-cb').checked;
         card.classList.toggle('wb-card-enabled', enabled);
+        updateVariantVisibility(card);
+    }
+
+    function updateVariantVisibility(card) {
+        var variant = (card.querySelector('.wb-sel-variant') || {}).value || 'single';
+        var isTwostep = variant === 'twostep';
+        card.querySelectorAll('.wb-single-only').forEach(function(el) {
+            el.style.display = isTwostep ? 'none' : '';
+        });
+        card.querySelectorAll('.wb-twostep-only').forEach(function(el) {
+            el.style.display = isTwostep ? '' : 'none';
+        });
     }
 
     function updateBadge() {
@@ -401,15 +475,32 @@
         document.querySelectorAll('.wb-card').forEach(function(card) {
             var deptId = card.dataset.deptId;
             var enabled = card.querySelector('.wb-enabled-cb').checked;
+            var variant = (card.querySelector('.wb-sel-variant') || {}).value || 'single';
 
-            existing[deptId] = {
+            var cfg = {
                 enabled: enabled,
+                variant: variant,
                 start_trigger_status: card.querySelector('.wb-sel-trigger').value,
                 start_target_status: card.querySelector('.wb-sel-working').value,
-                stop_target_status: card.querySelector('.wb-sel-done').value,
+                stop_target_status: (card.querySelector('.wb-sel-done') || {}).value || '',
                 stop_transfer_dept: card.querySelector('.wb-sel-transfer').value,
-                clear_team: card.querySelector('.wb-clear-team').checked
+                clear_team: card.querySelector('.wb-clear-team').checked,
+                // Per-department labels
+                start_label: (card.querySelector('.wb-lbl-start') || {}).value || '',
+                stop_label: (card.querySelector('.wb-lbl-stop') || {}).value || ''
             };
+
+            if (variant === 'twostep') {
+                cfg.step2_trigger_status = (card.querySelector('.wb-sel-step2-trigger') || {}).value || '';
+                cfg.step2_target_status = (card.querySelector('.wb-sel-step2-working') || {}).value || '';
+                cfg.step2_stop_target_status = (card.querySelector('.wb-sel-final-done') || {}).value || '';
+                cfg.step2_clear_team = (card.querySelector('.wb-step2-clear-team') || {}).checked || false;
+                cfg.partial_label = (card.querySelector('.wb-lbl-partial') || {}).value || '';
+                cfg.start2_label = (card.querySelector('.wb-lbl-start2') || {}).value || '';
+                cfg.finish_label = (card.querySelector('.wb-lbl-finish') || {}).value || '';
+            }
+
+            existing[deptId] = cfg;
         });
     }
 
