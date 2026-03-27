@@ -740,9 +740,39 @@ class QuickButtonsAjax extends AjaxController {
      */
     function dashboard() {
         $this->requireStaff();
+        global $thisstaff;
 
-        $days = max(1, min(90, (int) ($_GET['days'] ?? 7)));
-        $since = date('Y-m-d H:i:s', strtotime("-{$days} days"));
+        // Date range: support both ?days=N and ?from=YYYY-MM-DD&to=YYYY-MM-DD
+        $from = $_GET['from'] ?? null;
+        $to   = $_GET['to'] ?? null;
+        if ($from && $to) {
+            $from = date('Y-m-d', strtotime($from));
+            $to   = date('Y-m-d', strtotime($to));
+            if ($from > $to) { $tmp = $from; $from = $to; $to = $tmp; }
+            $since = $from . ' 00:00:00';
+            $until = $to . ' 23:59:59';
+            $days = (int) ((strtotime($to) - strtotime($from)) / 86400) + 1;
+        } else {
+            $days = max(1, min(365, (int) ($_GET['days'] ?? 7)));
+            $since = date('Y-m-d H:i:s', strtotime("-{$days} days"));
+            $until = date('Y-m-d H:i:s');
+            $from = date('Y-m-d', strtotime($since));
+            $to = date('Y-m-d');
+        }
+
+        // Access control: filter by agent's accessible departments
+        $deptFilter = '';
+        $isLimited = $thisstaff->isAccessLimited();
+        $accessDepts = $thisstaff->getDepts();
+        if (!$thisstaff->isAdmin() && $accessDepts) {
+            $deptIds = array_map('intval', $accessDepts);
+            $deptFilter = ' AND tk.dept_id IN (' . implode(',', $deptIds) . ')';
+        }
+        // If access-limited, also filter by staff assignment
+        $staffFilter = '';
+        if ($isLimited) {
+            $staffFilter = ' AND (tk.staff_id = ' . (int) $thisstaff->getId() . ')';
+        }
 
         // Get all Quick Buttons widget statuses for filtering
         $plugin = self::findPlugin();
@@ -761,13 +791,18 @@ class QuickButtonsAjax extends AjaxController {
         }
 
         // 1. Tickets processed per day (status change events)
+        // Use weekly rollup if range > 60 days
+        $groupExpr = $days > 60 ? "DATE_FORMAT(e.timestamp, '%Y-W%v')" : "DATE(e.timestamp)";
         $dailyRes = db_query(
-            "SELECT DATE(e.timestamp) as day, COUNT(*) as cnt
+            "SELECT {$groupExpr} as day, COUNT(*) as cnt
              FROM ost_thread_event e
              JOIN ost_thread t ON e.thread_id = t.id AND t.object_type = 'T'
+             JOIN ost_ticket tk ON t.object_id = tk.ticket_id
              WHERE e.event_id = 9 AND e.timestamp >= '{$since}'
+               AND e.timestamp <= '{$until}'
                AND e.data LIKE '%\"status\"%'
-             GROUP BY DATE(e.timestamp)
+               {$deptFilter} {$staffFilter}
+             GROUP BY day
              ORDER BY day");
         $daily = array();
         if ($dailyRes)
@@ -779,8 +814,11 @@ class QuickButtonsAjax extends AjaxController {
             "SELECT t.object_id as ticket_id, e.data, e.timestamp
              FROM ost_thread_event e
              JOIN ost_thread t ON e.thread_id = t.id AND t.object_type = 'T'
+             JOIN ost_ticket tk ON t.object_id = tk.ticket_id
              WHERE e.event_id = 9 AND e.timestamp >= '{$since}'
+               AND e.timestamp <= '{$until}'
                AND e.data LIKE '%\"status\"%'
+               {$deptFilter} {$staffFilter}
              ORDER BY t.object_id, e.timestamp");
         $stepDurations = array();
         $prevByTicket = array();
@@ -819,12 +857,20 @@ class QuickButtonsAjax extends AjaxController {
         }
 
         // 3. Agent leaderboard (claims in period)
+        // Access-limited agents only see their own stats
+        $agentLimit = '';
+        if ($isLimited) {
+            $agentLimit = ' AND e.staff_id = ' . (int) $thisstaff->getId();
+        }
         $agentRes = db_query(
             "SELECT e.staff_id, s.firstname, s.lastname, COUNT(*) as cnt
              FROM ost_thread_event e
              JOIN ost_thread t ON e.thread_id = t.id AND t.object_type = 'T'
+             JOIN ost_ticket tk ON t.object_id = tk.ticket_id
              LEFT JOIN ost_staff s ON e.staff_id = s.staff_id
              WHERE e.event_id = 4 AND e.timestamp >= '{$since}'
+               AND e.timestamp <= '{$until}'
+               {$deptFilter} {$agentLimit}
              GROUP BY e.staff_id
              ORDER BY cnt DESC
              LIMIT 20");
@@ -836,12 +882,21 @@ class QuickButtonsAjax extends AjaxController {
                     'count' => (int) $row['cnt'],
                 );
 
-        // 4. Current queue snapshot
+        // 4. Current queue snapshot (filtered by dept access)
+        $queueDeptFilter = '';
+        $queueStaffFilter = '';
+        if (!$thisstaff->isAdmin() && $accessDepts) {
+            $queueDeptFilter = ' AND tk.dept_id IN (' . implode(',', array_map('intval', $accessDepts)) . ')';
+        }
+        if ($isLimited) {
+            $queueStaffFilter = ' AND tk.staff_id = ' . (int) $thisstaff->getId();
+        }
         $queueRes = db_query(
             "SELECT s.id, s.name, COUNT(*) as cnt
-             FROM ost_ticket t
-             JOIN ost_ticket_status s ON t.status_id = s.id
+             FROM ost_ticket tk
+             JOIN ost_ticket_status s ON tk.status_id = s.id
              WHERE s.state = 'open'
+               {$queueDeptFilter} {$queueStaffFilter}
              GROUP BY s.id
              ORDER BY s.sort");
         $queue = array();
@@ -853,27 +908,53 @@ class QuickButtonsAjax extends AjaxController {
                     'count'      => (int) $row['cnt'],
                 );
 
+        // KPI summaries
+        $totalProcessed = array_sum(array_column($daily, 'count'));
+        $avgPerDay = $days > 0 ? round($totalProcessed / $days, 1) : 0;
+        $totalQueue = array_sum(array_column($queue, 'count'));
+        $activeAgents = count($agents);
+
         return $this->json_encode(array(
             'days'     => $days,
+            'from'     => $from,
+            'to'       => $to,
+            'weekly'   => $days > 60,
             'daily'    => $daily,
             'avgTimes' => $avgTimes,
             'agents'   => $agents,
             'queue'    => $queue,
+            'isLimited'=> $isLimited,
+            'kpi'      => array(
+                'totalProcessed' => $totalProcessed,
+                'avgPerDay'      => $avgPerDay,
+                'totalQueue'     => $totalQueue,
+                'activeAgents'   => $activeAgents,
+            ),
             'i18n'     => array(
-                'dashboard'     => __('Workflow Dashboard'),
-                'ticketsPerDay' => __('Tickets Processed Per Day'),
-                'avgTimePerStep'=> __('Average Time Per Step'),
-                'agentLeader'   => __('Agent Leaderboard'),
-                'currentQueue'  => __('Current Queue'),
-                'status'        => __('Status'),
-                'avgTime'       => __('Avg Time'),
-                'transitions'   => __('Transitions'),
-                'agent'         => __('Agent'),
-                'claimed'       => __('Claimed'),
-                'tickets'       => __('Tickets'),
-                'last7days'     => __('Last 7 Days'),
-                'last30days'    => __('Last 30 Days'),
-                'last90days'    => __('Last 90 Days'),
+                'dashboard'      => __('Workflow Dashboard'),
+                'ticketsPerDay'  => __('Tickets Processed Per Day'),
+                'ticketsPerWeek' => __('Tickets Processed Per Week'),
+                'avgTimePerStep' => __('Average Time Per Step'),
+                'agentLeader'    => __('Agent Leaderboard'),
+                'myPerformance'  => __('My Performance'),
+                'currentQueue'   => __('Current Queue'),
+                'status'         => __('Status'),
+                'avgTime'        => __('Avg Time'),
+                'transitions'    => __('Transitions'),
+                'agent'          => __('Agent'),
+                'claimed'        => __('Claimed'),
+                'tickets'        => __('Tickets'),
+                'last7days'      => __('Last 7 Days'),
+                'last30days'     => __('Last 30 Days'),
+                'last90days'     => __('Last 90 Days'),
+                'customRange'    => __('Custom Range'),
+                'totalProcessed' => __('Total Processed'),
+                'avgPerDay'      => __('Avg / Day'),
+                'openTickets'    => __('Open Tickets'),
+                'activeAgents'   => __('Active Agents'),
+                'from'           => __('From'),
+                'to'             => __('To'),
+                'apply'          => __('Apply'),
             ),
         ));
     }
