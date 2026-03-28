@@ -208,7 +208,10 @@
                 }
 
                 if (isMobile) {
-                    var $actions = $('<div class="qa-row-actions"></div>').append($link);
+                    var $actions = $('<div class="qa-row-actions"></div>');
+                    var $timerElM = $link.data('timer-el');
+                    if ($timerElM) $actions.append($timerElM);
+                    $actions.append($link);
                     $row.addClass('has-qa-inline').prepend($actions);
                 } else {
                     var $td = $('<td class="qa-actions-cell"></td>');

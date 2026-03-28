@@ -312,7 +312,27 @@ th.qa-actions-header {
         padding-left: 44px !important;
     }
 
-    /* Mobile buttons fill the column vertically */
+    /* Mobile timer badge — compact text strip above the button */
+    .qa-timer-badge {
+        display: block;
+        width: 100%;
+        max-width: none;
+        text-align: center;
+        font-size: 7px;
+        font-weight: 600;
+        letter-spacing: -0.3px;
+        line-height: 1;
+        padding: 4px 2px;
+        white-space: nowrap;
+        overflow: hidden;
+        border-radius: 0 6px 0 0; /* top-right rounded to match strip top */
+        background: rgba(0,0,0,0.08);
+    }
+    .dark-mode .qa-timer-badge {
+        background: rgba(255,255,255,0.1);
+    }
+
+    /* Mobile buttons fill the remainder of the column */
     .qa-inline-btn {
         width: 100%;
         height: auto;
@@ -327,19 +347,24 @@ th.qa-actions-header {
         transform: none;
     }
 
-    /* First button: round top-right */
-    .qa-inline-btn:first-child {
+    /* Use :first-of-type / :last-of-type so the timer <span> sibling
+       does not break the corner rounding on the <a> button */
+    .qa-inline-btn:first-of-type {
         border-radius: 0 6px 0 0;
     }
-
-    /* Last button: round bottom-right */
-    .qa-inline-btn:last-child {
+    .qa-inline-btn:last-of-type {
         border-radius: 0 0 6px 0;
     }
-
-    /* Solo button: round both right corners */
-    .qa-inline-btn:only-child {
+    .qa-inline-btn:only-of-type {
         border-radius: 0 6px 6px 0;
+    }
+    /* When a timer badge sits above: it takes the top-right corner,
+       button gets a flat top */
+    .qa-timer-badge + .qa-inline-btn {
+        border-radius: 0 0 6px 0;
+    }
+    .qa-timer-badge + .qa-inline-btn:only-of-type {
+        border-radius: 0 0 6px 0;
     }
 
     /* Mobile stacked icon sizing */
