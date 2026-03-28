@@ -178,7 +178,8 @@ class QuickButtonsAjax extends AjaxController {
         if (!is_array($data))
             return $this->json_encode(array('error' => __('Invalid JSON')));
 
-        // Validate via config class
+        // Validate via config class — use the already-instantiated config object
+        // (PluginConfig constructor takes a namespace string, not a PluginInstance)
         $config = $instance->getConfig();
         $errors = array();
         $testConfig = array(
@@ -186,8 +187,7 @@ class QuickButtonsAjax extends AjaxController {
             'widget_config' => $json,
         );
 
-        $configObj = new QuickButtonsConfig($instance);
-        if (!$configObj->pre_save($testConfig, $errors))
+        if (!$config->pre_save($testConfig, $errors))
             return $this->json_encode(array('error' => $errors['err'] ?? __('Validation failed')));
 
         // Save directly to DB
