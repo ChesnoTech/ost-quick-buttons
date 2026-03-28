@@ -575,6 +575,7 @@
         var xhr = new XMLHttpRequest();
         xhr.open('POST', D.saveUrl, true);
         xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+        // Send CSRF token both as header AND POST body param for maximum compatibility
         xhr.setRequestHeader('X-CSRFToken', D.csrfToken);
 
         xhr.onload = function() {
@@ -592,7 +593,10 @@
                     toast(resp.error || t('saveFailed'), 'error');
                 }
             } catch (e) {
-                toast(t('saveFailed') + ': ' + xhr.statusText, 'error');
+                // Server returned non-JSON (HTML error page, session timeout, etc.)
+                // Extract a readable snippet from the response for debugging
+                var snippet = xhr.responseText.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().substring(0, 120);
+                toast(t('saveFailed') + (snippet ? ': ' + snippet : ' (HTTP ' + xhr.status + ')'), 'error');
             }
         };
 
@@ -602,7 +606,9 @@
             toast(t('networkError'), 'error');
         };
 
-        xhr.send('widget_config=' + encodeURIComponent(json));
+        // Send CSRF token in body as well (osTicket fallback: __CSRFToken__ POST param)
+        xhr.send('widget_config=' + encodeURIComponent(json) +
+                 '&__CSRFToken__=' + encodeURIComponent(D.csrfToken));
     }
 
     // ================================================================
