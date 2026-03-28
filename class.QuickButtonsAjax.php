@@ -194,7 +194,10 @@ class QuickButtonsAjax extends AjaxController {
     }
 
     private function getCsrfToken() {
-        return csrf_token();
+        global $ost;
+        if ($ost && $ost->getCSRF())
+            return $ost->getCSRF()->getToken();
+        return '';
     }
 
     private function getWorkflowBuilderI18n() {
