@@ -94,29 +94,6 @@ class QuickButtonsAjax extends AjaxController {
     }
 
     // ================================================================
-    //  API: Admin Config Data
-    // ================================================================
-
-    function getAdminConfigData() {
-        $this->requireStaff();
-
-        return $this->json_encode(array(
-            'departments' => self::getDeptList(),
-            'statuses'    => self::getStatusList(),
-            'i18n'        => array(
-                'department'    => __('Department'),
-                'enabled'       => __('Enabled'),
-                'start_trigger' => __('Start: Trigger Status'),
-                'start_target'  => __('Start: Target Status'),
-                'stop_target'   => __('Stop: Target Status'),
-                'stop_transfer' => __('Stop: Transfer To'),
-                'clear_team'    => __('Clear Team'),
-                'select'        => __('-- Select --'),
-            ),
-        ));
-    }
-
-    // ================================================================
     //  Workflow Builder — Full-page editor
     // ================================================================
 

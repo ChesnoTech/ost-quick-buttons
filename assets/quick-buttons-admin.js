@@ -1,259 +1,107 @@
 /**
- * Quick Buttons Plugin - Admin Config v2.0
+ * Quick Buttons Plugin - Admin Config v3.0
  *
- * Builds a per-department configuration matrix for Start/Stop widgets.
- * Replaces the hidden widget_config textarea with a visual table UI.
+ * Instance config page: hides the raw widget_config field and shows a
+ * Workflow Builder launcher button with a live config summary.
+ *
+ * Dashboard: injects a Dashboard tab on the plugin main page.
  */
 (function($) {
     'use strict';
 
-    function initWidgetConfig() {
-        // Prevent double initialization
-        if ($('.qa-widget-matrix').length) return;
-        // Find the widget_config input by scanning all text inputs
-        // and checking their parent container for the "Widget Configuration" label.
-        // osTicket renders config fields in either <tr><td> or <div class="form-field"> layouts.
-        var $textarea = null;
-        var $formRow = null;
+    // ================================================================
+    //  Instance Config — Workflow Builder launcher
+    // ================================================================
 
+    function initWidgetConfig() {
+        if ($('.qa-widget-launcher').length) return;
+
+        var $textarea = null;
+        var $formRow  = null;
+
+        // Locate the widget_config field (works in both osTicket form layouts)
         $('input[type="text"], textarea').each(function() {
-            // Try <div class="form-field"> layout first
             var $field = $(this).closest('.form-field');
-            if ($field.length) {
-                var fieldText = $field.text().trim();
-                if (fieldText.indexOf('Widget Configuration') > -1) {
-                    $textarea = $(this);
-                    $formRow = $field;
-                    return false;
-                }
+            if ($field.length && $field.text().trim().indexOf('Widget Configuration') > -1) {
+                $textarea = $(this);
+                $formRow  = $field;
+                return false;
             }
-            // Try <tr><td> layout
             var $td = $(this).closest('td');
             if ($td.length) {
                 var $row = $td.closest('tr');
-                if ($row.length) {
-                    var label = $row.find('td:first').text().trim();
-                    if (label.indexOf('Widget Configuration') > -1) {
-                        $textarea = $(this);
-                        $formRow = $row;
-                        return false;
-                    }
+                if ($row.length && $row.find('td:first').text().trim().indexOf('Widget Configuration') > -1) {
+                    $textarea = $(this);
+                    $formRow  = $row;
+                    return false;
                 }
             }
         });
 
         if (!$textarea || !$textarea.length) return;
 
-        // Fetch departments and statuses from the server
-        $.ajax({
-            url: 'ajax.php/quick-buttons/admin-config-data',
-            type: 'GET',
-            dataType: 'json',
-            cache: false,
-            success: function(data) {
-                var strings = data.i18n || {};
-                buildMatrix($textarea, $formRow, data.departments, data.statuses, strings);
-            },
-            error: function() {
-                $formRow.after(
-                    '<tr><td colspan="2" style="color:red;padding:10px;">' +
-                    'Failed to load configuration data. Save the instance first, then reload.' +
-                    '</td></tr>'
-                );
-            }
-        });
-    }
-
-    function buildMatrix($textarea, $formRow, departments, statuses, i18n) {
-        // Parse existing config from textarea
-        var existing = {};
-        try {
-            var parsed = JSON.parse($textarea.val() || '{}');
-            existing = parsed.departments || {};
-        } catch (e) {
-            existing = {};
-        }
-
-        var selectLabel = i18n.select || '-- Select --';
-
-        // Build status options HTML
-        var statusOptions = '<option value="">' + escapeHtml(selectLabel) + '</option>';
-        $.each(statuses, function(i, s) {
-            statusOptions += '<option value="' + s.id + '">' +
-                escapeHtml(s.name) + ' (' + escapeHtml(s.state) + ')</option>';
-        });
-
-        // Build department options HTML (for transfer dropdown)
-        var deptOptions = '<option value="">' + escapeHtml(selectLabel) + '</option>';
-        $.each(departments, function(i, d) {
-            deptOptions += '<option value="' + d.id + '">' +
-                escapeHtml(d.name) + '</option>';
-        });
-
-        // Build the matrix container
-        var $container = $('<div class="qa-widget-matrix"></div>');
-
-        var $table = $(
-            '<table class="qa-matrix-table">' +
-            '<thead><tr>' +
-            '<th class="qa-col-dept">' + escapeHtml(i18n.department || 'Department') + '</th>' +
-            '<th class="qa-col-enabled">' + escapeHtml(i18n.enabled || 'Enabled') + '</th>' +
-            '<th class="qa-col-status">' + escapeHtml(i18n.start_trigger || 'Start: Trigger Status') + '</th>' +
-            '<th class="qa-col-status">' + escapeHtml(i18n.start_target || 'Start: Target Status') + '</th>' +
-            '<th class="qa-col-status">' + escapeHtml(i18n.stop_target || 'Stop: Target Status') + '</th>' +
-            '<th class="qa-col-dept-sel">' + escapeHtml(i18n.stop_transfer || 'Stop: Transfer To') + '</th>' +
-            '<th class="qa-col-enabled">' + escapeHtml(i18n.clear_team || 'Clear Team') + '</th>' +
-            '</tr></thead>' +
-            '<tbody></tbody>' +
-            '</table>'
-        );
-
-        var $tbody = $table.find('tbody');
-
-        $.each(departments, function(i, dept) {
-            var cfg = existing[dept.id] || {};
-            var enabled = !!cfg.enabled;
-
-            var $row = $('<tr class="qa-matrix-row" data-dept-id="' + dept.id + '"></tr>');
-
-            // Department name
-            $row.append('<td class="qa-cell-dept">' + escapeHtml(dept.name) + '</td>');
-
-            // Enabled checkbox
-            $row.append(
-                '<td class="qa-cell-enabled">' +
-                '<input type="checkbox" class="qa-dept-enabled"' +
-                (enabled ? ' checked' : '') + '>' +
-                '</td>'
-            );
-
-            // Start Trigger Status
-            $row.append(
-                '<td class="qa-cell-select">' +
-                '<select class="qa-start-trigger">' + statusOptions + '</select>' +
-                '</td>'
-            );
-
-            // Start Target Status
-            $row.append(
-                '<td class="qa-cell-select">' +
-                '<select class="qa-start-target">' + statusOptions + '</select>' +
-                '</td>'
-            );
-
-            // Stop Target Status
-            $row.append(
-                '<td class="qa-cell-select">' +
-                '<select class="qa-stop-target">' + statusOptions + '</select>' +
-                '</td>'
-            );
-
-            // Stop Transfer Department
-            $row.append(
-                '<td class="qa-cell-select">' +
-                '<select class="qa-stop-transfer">' + deptOptions + '</select>' +
-                '</td>'
-            );
-
-            // Clear Team checkbox
-            $row.append(
-                '<td class="qa-cell-enabled">' +
-                '<input type="checkbox" class="qa-clear-team"' +
-                (cfg.clear_team ? ' checked' : '') + '>' +
-                '</td>'
-            );
-
-            // Set existing values
-            if (cfg.start_trigger_status)
-                $row.find('.qa-start-trigger').val(cfg.start_trigger_status);
-            if (cfg.start_target_status)
-                $row.find('.qa-start-target').val(cfg.start_target_status);
-            if (cfg.stop_target_status)
-                $row.find('.qa-stop-target').val(cfg.stop_target_status);
-            if (cfg.stop_transfer_dept)
-                $row.find('.qa-stop-transfer').val(cfg.stop_transfer_dept);
-
-            // Toggle disabled state on dropdowns
-            toggleRow($row, enabled);
-
-            $tbody.append($row);
-        });
-
-        $container.append($table);
-
-        // Add "Open Workflow Builder" button
+        // Parse saved JSON to build a human-readable summary (no AJAX needed)
+        var summary = buildSummary($textarea.val());
         var instanceId = getInstanceId();
+
+        var $launcher = $('<div class="qa-widget-launcher" style="margin:10px 0 18px;"></div>');
+
         if (instanceId) {
-            var $builderBtn = $(
-                '<div class="qa-builder-launcher" style="margin:15px 0;">' +
+            $launcher.html(
                 '<a href="ajax.php/quick-buttons/workflow-builder?iid=' + instanceId + '" ' +
-                'target="_blank" class="action-button" ' +
-                'style="display:inline-block;padding:10px 24px;background:#128DBE;color:#fff;' +
-                'border-radius:6px;text-decoration:none;font-size:14px;font-weight:500;">' +
-                '\u2699 Open Workflow Builder' +
+                'class="action-button" ' +
+                'style="display:inline-flex;align-items:center;gap:8px;padding:10px 24px;' +
+                'background:#128DBE;color:#fff;border-radius:6px;text-decoration:none;' +
+                'font-size:14px;font-weight:500;line-height:1;">' +
+                '&#9881; Open Workflow Builder' +
                 '</a>' +
-                '<span style="margin-left:12px;color:#888;font-size:12px;">' +
-                'Visual editor for department configurations' +
-                '</span></div>'
+                '<span class="qa-config-summary" style="margin-left:14px;color:#666;font-size:13px;">' +
+                escapeHtml(summary) +
+                '</span>'
             );
-            $formRow.before($builderBtn);
-        }
-
-        // Insert the matrix after the form row and hide the original field
-        $formRow.hide();
-        $formRow.after($container);
-
-        // Event: toggle enabled
-        $container.on('change', '.qa-dept-enabled', function() {
-            var $row = $(this).closest('.qa-matrix-row');
-            toggleRow($row, this.checked);
-            serializeConfig($textarea, $tbody);
-        });
-
-        // Event: any dropdown or checkbox change
-        $container.on('change', 'select, .qa-clear-team', function() {
-            serializeConfig($textarea, $tbody);
-        });
-
-        // Initial serialize
-        serializeConfig($textarea, $tbody);
-    }
-
-    function toggleRow($row, enabled) {
-        $row.find('select').prop('disabled', !enabled);
-        if (enabled) {
-            $row.removeClass('qa-row-disabled');
         } else {
-            $row.addClass('qa-row-disabled');
+            $launcher.html(
+                '<p style="color:#e74c3c;font-size:13px;">&#9888; Save this instance first, ' +
+                'then reopen to access the Workflow Builder.</p>'
+            );
         }
+
+        $formRow.hide();
+        $formRow.before($launcher);
     }
 
-    function serializeConfig($textarea, $tbody) {
-        var departments = {};
+    function buildSummary(raw) {
+        try {
+            var cfg    = JSON.parse(raw || '{}');
+            var depts  = cfg.departments || {};
+            var keys   = Object.keys(depts);
+            var total  = 0;
+            var single = 0;
+            var two    = 0;
 
-        $tbody.find('.qa-matrix-row').each(function() {
-            var $row = $(this);
-            var deptId = $row.data('dept-id').toString();
-            var enabled = $row.find('.qa-dept-enabled').is(':checked');
+            keys.forEach(function(k) {
+                var d = depts[k];
+                if (!d.enabled) return;
+                total++;
+                if (d.variant === 'twostep') two++;
+                else single++;
+            });
 
-            departments[deptId] = {
-                enabled: enabled,
-                start_trigger_status: $row.find('.qa-start-trigger').val() || '',
-                start_target_status: $row.find('.qa-start-target').val() || '',
-                stop_target_status: $row.find('.qa-stop-target').val() || '',
-                stop_transfer_dept: $row.find('.qa-stop-transfer').val() || '',
-                clear_team: $row.find('.qa-clear-team').is(':checked')
-            };
-        });
+            if (total === 0) return 'No departments configured yet — click to set up';
 
-        var json = JSON.stringify({ departments: departments });
-        $textarea.val(json);
+            var parts = [];
+            if (single > 0) parts.push(single + ' single-step');
+            if (two   > 0) parts.push(two   + ' two-step');
+            return total + ' department' + (total !== 1 ? 's' : '') + ' configured (' + parts.join(', ') + ')';
+
+        } catch (e) {
+            return 'Click to configure';
+        }
     }
 
     function getInstanceId() {
-        // Extract instance ID from URL: plugins.php?id=X&xid=Y
-        var match = window.location.search.match(/[?&]xid=(\d+)/);
-        return match ? match[1] : null;
+        var m = window.location.search.match(/[?&]xid=(\d+)/);
+        return m ? m[1] : null;
     }
 
     function escapeHtml(str) {
@@ -271,8 +119,7 @@
 
     function initDashboard() {
         // Only show on plugin main page (not instance edit)
-        // Detect by: page has "Instances" tab but no "Widget Configuration" field
-        var isPluginPage = $('a[href="#instances"]').length > 0;
+        var isPluginPage   = $('a[href="#instances"]').length > 0;
         var isInstancePage = $('input[type="text"], textarea').filter(function() {
             var $f = $(this).closest('.form-field');
             return $f.length && $f.text().indexOf('Widget Configuration') > -1;
@@ -281,35 +128,29 @@
         if (!isPluginPage || isInstancePage) return;
         if ($('.qa-dashboard').length) return;
 
-        // Add Dashboard tab — works with osTicket's tab system
-        // Structure: <ul id="plugin-tabs"> + <div id="plugin-tabs_container">
         var $tabList = $('#plugin-tabs');
-        if (!$tabList.length)
-            $tabList = $('ul.tabs, .tab_nav ul').first();
+        if (!$tabList.length) $tabList = $('ul.tabs, .tab_nav ul').first();
         if (!$tabList.length) return;
 
         $tabList.append('<li><a href="#dashboard">Dashboard</a></li>');
 
-        // Create dashboard container inside the tab_content parent
-        var $container = $('<div id="dashboard" class="tab_content qa-dashboard" style="display:none;padding:15px;"></div>');
+        var $container = $(
+            '<div id="dashboard" class="tab_content qa-dashboard" ' +
+            'style="display:none;padding:15px;"></div>'
+        );
         $container.html('<p style="color:#888;">Loading dashboard...</p>');
 
-        // Append to the tab container (e.g., #plugin-tabs_container)
         var $tabContainer = $('#plugin-tabs_container');
         if ($tabContainer.length) {
             $tabContainer.append($container);
         } else {
-            // Fallback: after the tab list
             $tabList.after($container);
         }
 
-        // Tab switching — use osTicket's native tab mechanism
         $tabList.on('click', 'a[href="#dashboard"]', function(e) {
             e.preventDefault();
-            // Deactivate all tabs
             $tabList.find('li').removeClass('active');
             $(this).parent().addClass('active');
-            // Hide all tab content siblings
             $container.siblings('.tab_content').hide();
             $container.show();
             loadDashboard($container, 7);
@@ -322,9 +163,7 @@
             type: 'GET',
             dataType: 'json',
             cache: false,
-            success: function(data) {
-                renderDashboard($container, data);
-            },
+            success: function(data) { renderDashboard($container, data); },
             error: function() {
                 $container.html('<p style="color:red;">Failed to load dashboard data.</p>');
             }
@@ -337,12 +176,11 @@
 
         // Period selector
         html += '<div class="qa-dash-controls">';
-        html += '<button class="qa-dash-period" data-days="7">' + escapeHtml(i18n.last7days || 'Last 7 Days') + '</button>';
+        html += '<button class="qa-dash-period" data-days="7">'  + escapeHtml(i18n.last7days  || 'Last 7 Days')  + '</button>';
         html += '<button class="qa-dash-period" data-days="30">' + escapeHtml(i18n.last30days || 'Last 30 Days') + '</button>';
         html += '<button class="qa-dash-period" data-days="90">' + escapeHtml(i18n.last90days || 'Last 90 Days') + '</button>';
         html += '</div>';
 
-        // Grid layout
         html += '<div class="qa-dash-grid">';
 
         // Card 1: Daily throughput
@@ -368,8 +206,8 @@
         html += '<div class="qa-dash-card">';
         html += '<h3>' + escapeHtml(i18n.avgTimePerStep || 'Avg Time Per Step') + '</h3>';
         html += '<table class="qa-dash-table"><thead><tr>';
-        html += '<th>' + escapeHtml(i18n.status || 'Status') + '</th>';
-        html += '<th>' + escapeHtml(i18n.avgTime || 'Avg Time') + '</th>';
+        html += '<th>' + escapeHtml(i18n.status      || 'Status')      + '</th>';
+        html += '<th>' + escapeHtml(i18n.avgTime     || 'Avg Time')    + '</th>';
         html += '<th>' + escapeHtml(i18n.transitions || 'Transitions') + '</th>';
         html += '</tr></thead><tbody>';
         if (data.avgTimes && data.avgTimes.length) {
@@ -387,12 +225,12 @@
         html += '<div class="qa-dash-card">';
         html += '<h3>' + escapeHtml(i18n.agentLeader || 'Agent Leaderboard') + '</h3>';
         html += '<table class="qa-dash-table"><thead><tr>';
-        html += '<th>' + escapeHtml(i18n.agent || 'Agent') + '</th>';
+        html += '<th>' + escapeHtml(i18n.agent   || 'Agent')   + '</th>';
         html += '<th>' + escapeHtml(i18n.claimed || 'Claimed') + '</th>';
         html += '</tr></thead><tbody>';
         if (data.agents && data.agents.length) {
             data.agents.forEach(function(a, idx) {
-                var medal = idx === 0 ? ' 🥇' : idx === 1 ? ' 🥈' : idx === 2 ? ' 🥉' : '';
+                var medal = idx === 0 ? ' \uD83E\uDD47' : idx === 1 ? ' \uD83E\uDD48' : idx === 2 ? ' \uD83E\uDD49' : '';
                 html += '<tr><td>' + escapeHtml(a.name) + medal + '</td>';
                 html += '<td><strong>' + a.count + '</strong></td></tr>';
             });
@@ -405,7 +243,7 @@
         html += '<div class="qa-dash-card">';
         html += '<h3>' + escapeHtml(i18n.currentQueue || 'Current Queue') + '</h3>';
         html += '<table class="qa-dash-table"><thead><tr>';
-        html += '<th>' + escapeHtml(i18n.status || 'Status') + '</th>';
+        html += '<th>' + escapeHtml(i18n.status  || 'Status')  + '</th>';
         html += '<th>' + escapeHtml(i18n.tickets || 'Tickets') + '</th>';
         html += '</tr></thead><tbody>';
         if (data.queue && data.queue.length) {
@@ -418,17 +256,17 @@
         }
         html += '</tbody></table></div>';
 
-        // Card 5: Calculated Field Values (if data available)
+        // Card 5: Calculated Field Values (optional)
         if (data.cfValues && data.cfValues.length) {
             html += '<div class="qa-dash-card">';
             html += '<h3>' + escapeHtml(i18n.fieldValues || 'Field Values') + '</h3>';
             html += '<table class="qa-dash-table"><thead><tr>';
-            html += '<th>' + escapeHtml(i18n.agent || 'Agent') + '</th>';
-            html += '<th>' + escapeHtml(i18n.totalValue || 'Total') + '</th>';
+            html += '<th>' + escapeHtml(i18n.agent       || 'Agent')   + '</th>';
+            html += '<th>' + escapeHtml(i18n.totalValue  || 'Total')   + '</th>';
             html += '<th>' + escapeHtml(i18n.ticketCount || 'Tickets') + '</th>';
             html += '</tr></thead><tbody>';
             data.cfValues.forEach(function(a, idx) {
-                var medal = idx === 0 ? ' 🥇' : idx === 1 ? ' 🥈' : idx === 2 ? ' 🥉' : '';
+                var medal = idx === 0 ? ' \uD83E\uDD47' : idx === 1 ? ' \uD83E\uDD48' : idx === 2 ? ' \uD83E\uDD49' : '';
                 html += '<tr><td>' + escapeHtml(a.name) + medal + '</td>';
                 html += '<td><strong>' + a.total + '</strong></td>';
                 html += '<td>' + a.count + '</td></tr>';
@@ -440,7 +278,6 @@
 
         $container.html(html);
 
-        // Period button handler
         $container.find('.qa-dash-period').on('click', function() {
             var days = $(this).data('days');
             $container.html('<p style="color:#888;">Loading...</p>');
@@ -448,7 +285,10 @@
         });
     }
 
-    // Initialize on DOM ready and after PJAX navigations
+    // ================================================================
+    //  Bootstrap
+    // ================================================================
+
     $(function() {
         initWidgetConfig();
         initDashboard();

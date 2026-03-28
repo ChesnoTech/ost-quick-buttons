@@ -47,7 +47,6 @@ class QuickButtonsPlugin extends Plugin {
                 url_post('^undo$', 'undo'),
                 url_get('^dashboard$', 'dashboard'),
                 url_get('^dashboard-page$', 'serveDashboardPage'),
-                url_get('^admin-config-data$', 'getAdminConfigData'),
                 url_get('^workflow-builder$', 'serveWorkflowBuilder'),
                 url_post('^workflow-builder-save$', 'saveWorkflowBuilder'),
                 url_get('^assets/js$', 'serveJs'),
