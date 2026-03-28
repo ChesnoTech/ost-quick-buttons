@@ -410,18 +410,19 @@ class QuickButtonsAjax extends AjaxController {
             if ($ids) {
                 $in = implode(',', $ids);
                 $res = db_query(
-                    "SELECT ticket_id, topic_id, dept_id, status_id, staff_id, lastupdate FROM "
-                    . TICKET_TABLE . " WHERE ticket_id IN ($in)");
+                    "SELECT ticket_id, topic_id, dept_id, status_id, staff_id,
+                            TIMESTAMPDIFF(SECOND, lastupdate, NOW()) AS elapsed_secs
+                     FROM " . TICKET_TABLE . " WHERE ticket_id IN ($in)");
                 if ($res) {
                     $map = array();
                     while ($row = db_fetch_array($res)) {
                         $tid = (string) $row['ticket_id'];
                         $map[$tid] = array(
-                            'topic'     => $row['topic_id'] ? (string) $row['topic_id'] : null,
-                            'dept'      => $row['dept_id'] ? (string) $row['dept_id'] : null,
-                            'status'    => $row['status_id'] ? (string) $row['status_id'] : null,
-                            'staff'     => $row['staff_id'] ? (string) $row['staff_id'] : null,
-                            'updated'   => $row['lastupdate'] ?: null,
+                            'topic'      => $row['topic_id'] ? (string) $row['topic_id'] : null,
+                            'dept'       => $row['dept_id'] ? (string) $row['dept_id'] : null,
+                            'status'     => $row['status_id'] ? (string) $row['status_id'] : null,
+                            'staff'      => $row['staff_id'] ? (string) $row['staff_id'] : null,
+                            'since_secs' => isset($row['elapsed_secs']) ? (int) $row['elapsed_secs'] : null,
                         );
                     }
                     $tickets = (object) $map;

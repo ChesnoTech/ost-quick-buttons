@@ -80,14 +80,10 @@
                 success: function(data) {
                     QA.widgets = data.widgets || [];
                     QA.tickets = data.tickets || {};
-                    QA.serverNow = data.serverNow || '';
-                    QA.serverOffset = 0;
-                    if (QA.serverNow) {
-                        // Parse without 'Z' so JS uses local timezone, matching how
-                        // the server's MySQL timestamps are stored (no timezone info).
-                        var serverMs = new Date(QA.serverNow.replace(' ', 'T')).getTime();
-                        QA.serverOffset = serverMs - Date.now();
-                    }
+                    // Record the JS timestamp at the moment the API response arrives.
+                    // Combined with server-computed elapsed_secs (TIMESTAMPDIFF in MySQL),
+                    // this lets us show correct elapsed time with zero timezone guesswork.
+                    QA.fetchMs = Date.now();
                     if (data.i18n) QA.i18n = $.extend(QA.i18n, data.i18n);
                     if (data.perms) QA.perms = data.perms;
                     if (QA.widgets.length) {
@@ -199,11 +195,14 @@
                 // Live timer — show as badge above button + tooltip
                 // Stop = "working time" (green), Start = "waiting time" (orange)
                 var info = QA.tickets[ticketId];
-                if (info && info.updated) {
+                if (info && info.since_secs != null) {
                     var timerClass = (resolved.action === 'stop' || resolved.action === 'partial')
                         ? 'qa-timer-badge qa-timer-working'
                         : 'qa-timer-badge qa-timer-waiting';
-                    var $timer = $('<span class="' + timerClass + '" data-since="' + info.updated + '"></span>');
+                    // since_secs: seconds elapsed at API-fetch time (computed by MySQL TIMESTAMPDIFF).
+                    // Timezone-agnostic: both operands are in MySQL's own timezone.
+                    var sinceMs = QA.fetchMs - (info.since_secs * 1000);
+                    var $timer = $('<span class="' + timerClass + '" data-since-ms="' + sinceMs + '"></span>');
                     $link.data('timer-el', $timer);
                     $link.attr('data-timer', '1');
                 }
@@ -243,9 +242,8 @@
             QA.timerBadges = [];
             $('.qa-timer-badge').each(function() {
                 var $el = $(this);
-                var since = $el.data('since');
-                if (!since) return;
-                var sinceMs = new Date(since.replace(' ', 'T')).getTime();
+                var sinceMs = parseInt($el.data('since-ms'), 10);
+                if (!sinceMs) return;
                 QA.timerBadges.push({
                     $el: $el,
                     sinceMs: sinceMs,
@@ -260,7 +258,7 @@
         },
 
         updateTimers: function() {
-            var nowMs = Date.now() + (QA.serverOffset || 0);
+            var nowMs = Date.now();
             for (var i = 0; i < QA.timerBadges.length; i++) {
                 var badge = QA.timerBadges[i];
                 var diffSec = Math.max(0, Math.floor((nowMs - badge.sinceMs) / 1000));
