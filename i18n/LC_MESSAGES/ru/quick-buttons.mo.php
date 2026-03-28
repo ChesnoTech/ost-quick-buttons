@@ -37,6 +37,10 @@ Plural-Forms: nplurals=4; plural=((n%10==1 && n%100!=11) ? 0 : ((n%10 >= 2 && n%
   'Start Selected' => 'Начать выбранные',
   'Complete Selected' => 'Завершить выбранные',
   'elapsed' => 'прошло',
+  'waiting' => 'ожидание',
+  'H' => 'ч',
+  'M' => 'м',
+  'S' => 'с',
 
   // Admin matrix
   'Department' => 'Отдел',

@@ -22,7 +22,8 @@
                 executingIn: 'Executing in %ss...',
                 partialReady: 'Next', startStep2: 'Start Step 2',
                 undo: 'Undo', bulkStart: 'Start Selected', bulkStop: 'Complete Selected',
-                elapsed: 'elapsed', waiting: 'waiting' },
+                elapsed: 'elapsed', waiting: 'waiting',
+                labelH: 'H', labelM: 'M', labelS: 'S' },
         perms: { canAssign: true, canTransfer: true, canRelease: true, canManage: true },
         executing: {},
         timerInterval: null,
@@ -126,6 +127,12 @@
                 if (!action) continue;
                 if ((action === 'start' || action === 'start2') && !QA.perms.canAssign) continue;
                 if ((action === 'stop' || action === 'partial') && !QA.perms.canManage) continue;
+                // Release actions: only show if the ticket is assigned to this agent.
+                // System administrators (isAdmin) can see and act on any claimed ticket.
+                if ((action === 'stop' || action === 'partial') && info.staff
+                        && String(info.staff) !== String(QA.perms.staffId || '')
+                        && !QA.perms.isAdmin)
+                    continue;
 
                 return {
                     action: action, widgetId: w.id, deptId: ticketDept,
@@ -210,7 +217,7 @@
                 if (isMobile) {
                     var $actions = $('<div class="qa-row-actions"></div>');
                     var $timerElM = $link.data('timer-el');
-                    if ($timerElM) $actions.append($timerElM);
+                    if ($timerElM) $link.prepend($timerElM); // timer inside button
                     $actions.append($link);
                     $row.addClass('has-qa-inline').prepend($actions);
                 } else {
@@ -251,7 +258,9 @@
                     $el: $el,
                     sinceMs: sinceMs,
                     isWaiting: $el.hasClass('qa-timer-waiting'),
-                    $btn: $el.siblings('.qa-inline-btn')
+                    $btn: $el.closest('.qa-inline-btn').length
+                        ? $el.closest('.qa-inline-btn')
+                        : $el.siblings('.qa-inline-btn')
                 });
             });
             if (QA.timerBadges.length) {
@@ -260,13 +269,51 @@
             }
         },
 
+        renderTimerHtml: function(h, m, s) {
+            var lH = QA.i18n.labelH || 'H';
+            var lM = QA.i18n.labelM || 'M';
+            var lS = QA.i18n.labelS || 'S';
+            var parts = [];
+            if (h > 0) {
+                parts.push(
+                    '<span class="qa-tl">' + lH + '</span>' +
+                    '<span class="qa-tv">' + h + '</span>' +
+                    '<span class="qa-ts"></span>' +
+                    '<span class="qa-tl">' + lM + '</span>' +
+                    '<span class="qa-tv">' + (m < 10 ? '0' + m : m) + '</span>'
+                );
+            } else if (m > 0) {
+                parts.push(
+                    '<span class="qa-tl">' + lM + '</span>' +
+                    '<span class="qa-tv">' + m + '</span>' +
+                    '<span class="qa-ts"></span>' +
+                    '<span class="qa-tl">' + lS + '</span>' +
+                    '<span class="qa-tv">' + (s < 10 ? '0' + s : s) + '</span>'
+                );
+            } else {
+                parts.push(
+                    '<span class="qa-tl">' + lS + '</span>' +
+                    '<span class="qa-tv">' + s + '</span>'
+                );
+            }
+            return parts.join('');
+        },
+
         updateTimers: function() {
             var nowMs = Date.now();
+            var isMobile = window.matchMedia('(max-width: 760px)').matches;
             for (var i = 0; i < QA.timerBadges.length; i++) {
                 var badge = QA.timerBadges[i];
                 var diffSec = Math.max(0, Math.floor((nowMs - badge.sinceMs) / 1000));
+                var h = Math.floor(diffSec / 3600);
+                var m = Math.floor((diffSec % 3600) / 60);
+                var s = diffSec % 60;
+                if (isMobile) {
+                    badge.$el.html(QA.renderTimerHtml(h, m, s));
+                } else {
+                    badge.$el.text(QA.formatDuration(diffSec));
+                }
                 var formatted = QA.formatDuration(diffSec);
-                badge.$el.text(formatted);
                 var suffix = badge.isWaiting ? (QA.i18n.waiting || 'waiting') : (QA.i18n.elapsed || 'elapsed');
                 badge.$btn.attr('title', formatted + ' ' + suffix);
             }

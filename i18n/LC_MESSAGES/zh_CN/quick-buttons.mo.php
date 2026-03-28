@@ -37,6 +37,10 @@ Plural-Forms: nplurals=1; plural=0;
   'Start Selected' => '开始所选',
   'Complete Selected' => '完成所选',
   'elapsed' => '已用时',
+  'waiting' => '等待中',
+  'H' => '时',
+  'M' => '分',
+  'S' => '秒',
 
   // Admin matrix
   'Department' => '部门',

@@ -37,6 +37,10 @@ Plural-Forms: nplurals=6; plural=(n==0 ? 0 : n==1 ? 1 : n==2 ? 2 : n%100>=3 && n
   'Start Selected' => 'بدء المحددة',
   'Complete Selected' => 'إكمال المحددة',
   'elapsed' => 'مضى',
+  'waiting' => 'في الانتظار',
+  'H' => 'س',
+  'M' => 'د',
+  'S' => 'ث',
 
   // Admin matrix
   'Department' => 'القسم',

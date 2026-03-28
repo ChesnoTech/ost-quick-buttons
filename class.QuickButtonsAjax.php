@@ -480,6 +480,9 @@ class QuickButtonsAjax extends AjaxController {
             'bulkStop'     => __('Complete Selected'),
             'elapsed'      => __('elapsed'),
             'waiting'      => __('waiting'),
+            'labelH'       => __('H'),
+            'labelM'       => __('M'),
+            'labelS'       => __('S'),
         );
     }
 
@@ -489,6 +492,8 @@ class QuickButtonsAjax extends AjaxController {
             'canTransfer' => $thisstaff->hasPerm(Ticket::PERM_TRANSFER, false),
             'canRelease'  => $thisstaff->hasPerm(Ticket::PERM_RELEASE, false),
             'canManage'   => $thisstaff->canManageTickets(),
+            'staffId'     => (string) $thisstaff->getId(),
+            'isAdmin'     => (bool) $thisstaff->isAdmin(),
         );
     }
 
@@ -630,6 +635,17 @@ class QuickButtonsAjax extends AjaxController {
                 'team_id'   => $ticket->getTeamId(),
                 'dept_id'   => $ticket->getDeptId(),
             );
+
+            // For release/stop actions: ticket must be assigned to this agent.
+            // Only system administrators (isAdmin) are exempt — regular agents
+            // with canManageTickets (e.g. Expanded Access role) are NOT exempt.
+            if ($shouldRelease && $ticket->getStaffId()
+                    && (int) $ticket->getStaffId() !== (int) $thisstaff->getId()
+                    && !$thisstaff->isAdmin()) {
+                $failed++;
+                $errors_list[] = sprintf(__('Ticket #%s is assigned to another agent'), $ticketNum);
+                continue;
+            }
 
             if ($shouldClaim) {
                 $ok = $this->doStart($ticket, $thisstaff, $targetStatus, $ticketNum, $errors_list);

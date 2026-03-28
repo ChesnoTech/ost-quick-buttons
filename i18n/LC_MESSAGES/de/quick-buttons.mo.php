@@ -37,6 +37,10 @@ Plural-Forms: nplurals=2; plural=(n != 1);
   'Start Selected' => 'Ausgewählte starten',
   'Complete Selected' => 'Ausgewählte abschließen',
   'elapsed' => 'vergangen',
+  'waiting' => 'wartend',
+  'H' => 'Std',
+  'M' => 'Min',
+  'S' => 'Sek',
 
   // Admin matrix
   'Department' => 'Abteilung',
