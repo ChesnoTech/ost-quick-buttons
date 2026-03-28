@@ -191,14 +191,17 @@ class QuickButtonsAjax extends AjaxController {
             return $this->json_encode(array('error' => $errors['err'] ?? __('Validation failed')));
 
         // Save directly to DB
+        // Note: db_input() already wraps the value in quotes — do NOT add extra quotes in sprintf
         $ns = 'plugin.' . $plugin->getId() . '.instance.' . $iid;
-        db_query(sprintf(
-            "INSERT INTO %s (namespace, `key`, value, updated) VALUES ('%s', 'widget_config', '%s', NOW())
+        $result = db_query(sprintf(
+            "INSERT INTO %s (namespace, `key`, value, updated) VALUES (%s, 'widget_config', %s, NOW())
              ON DUPLICATE KEY UPDATE value=VALUES(value), updated=NOW()",
             CONFIG_TABLE,
             db_input($ns),
             db_input($json)
         ));
+        if (!$result)
+            return $this->json_encode(array('error' => 'DB error: ' . db_error()));
 
         return $this->json_encode(array('success' => true, 'message' => __('Configuration saved')));
     }
