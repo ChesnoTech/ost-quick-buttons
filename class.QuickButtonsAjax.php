@@ -149,6 +149,16 @@ class QuickButtonsAjax extends AjaxController {
     }
 
     function saveWorkflowBuilder() {
+        try {
+            return $this->_saveWorkflowBuilderInner();
+        } catch (\Throwable $e) {
+            return $this->json_encode(array(
+                'error' => $e->getMessage() . ' [' . basename($e->getFile()) . ':' . $e->getLine() . ']'
+            ));
+        }
+    }
+
+    private function _saveWorkflowBuilderInner() {
         $this->requireStaff();
 
         $iid = (int) ($_GET['iid'] ?? 0);
