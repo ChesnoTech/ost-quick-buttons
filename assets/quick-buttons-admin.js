@@ -418,6 +418,24 @@
         }
         html += '</tbody></table></div>';
 
+        // Card 5: Calculated Field Values (if data available)
+        if (data.cfValues && data.cfValues.length) {
+            html += '<div class="qa-dash-card">';
+            html += '<h3>' + escapeHtml(i18n.fieldValues || 'Field Values') + '</h3>';
+            html += '<table class="qa-dash-table"><thead><tr>';
+            html += '<th>' + escapeHtml(i18n.agent || 'Agent') + '</th>';
+            html += '<th>' + escapeHtml(i18n.totalValue || 'Total') + '</th>';
+            html += '<th>' + escapeHtml(i18n.ticketCount || 'Tickets') + '</th>';
+            html += '</tr></thead><tbody>';
+            data.cfValues.forEach(function(a, idx) {
+                var medal = idx === 0 ? ' 🥇' : idx === 1 ? ' 🥈' : idx === 2 ? ' 🥉' : '';
+                html += '<tr><td>' + escapeHtml(a.name) + medal + '</td>';
+                html += '<td><strong>' + a.total + '</strong></td>';
+                html += '<td>' + a.count + '</td></tr>';
+            });
+            html += '</tbody></table></div>';
+        }
+
         html += '</div>'; // grid
 
         $container.html(html);

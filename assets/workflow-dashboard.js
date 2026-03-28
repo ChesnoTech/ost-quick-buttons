@@ -120,6 +120,10 @@
         if (!isLimited) {
             html += kpiCard('purple', t('activeAgents'), kpi.activeAgents || 0, t('activeAgents'));
         }
+        if (data.cfValues && data.cfValues.length) {
+            var cfTotalKpi = data.cfValues.reduce(function(s, a) { return s + a.total; }, 0);
+            html += kpiCard('teal', t('fieldValues'), cfTotalKpi.toFixed(1), t('totalValue'));
+        }
         html += '</div>';
 
         // ── Charts Grid ──
@@ -191,6 +195,37 @@
             html += '<div style="color:#999;padding:20px;text-align:center;">' + esc(t('noData')) + '</div>';
         }
         html += '</div>';
+
+        // Calculated Field Values
+        if (data.cfValues && data.cfValues.length) {
+            html += '<div class="wd-card">';
+            html += '<h3>' + esc(t('fieldValues')) + '</h3>';
+            html += '<table class="wd-table"><thead><tr>';
+            html += '<th>' + esc(t('agent')) + '</th>';
+            html += '<th class="wd-num">' + esc(t('totalValue')) + '</th>';
+            html += '<th class="wd-num">' + esc(t('ticketCount')) + '</th>';
+            html += '<th class="wd-num">' + esc(t('average')) + '</th>';
+            html += '</tr></thead><tbody>';
+            var cfTotal = 0, cfCount = 0;
+            data.cfValues.forEach(function(a) {
+                var avg = a.count > 0 ? (a.total / a.count).toFixed(2) : '0';
+                html += '<tr>';
+                html += '<td>' + esc(a.name) + '</td>';
+                html += '<td class="wd-num">' + a.total + '</td>';
+                html += '<td class="wd-num">' + a.count + '</td>';
+                html += '<td class="wd-num">' + avg + '</td>';
+                html += '</tr>';
+                cfTotal += a.total;
+                cfCount += a.count;
+            });
+            html += '</tbody><tfoot><tr>';
+            html += '<td><strong>' + esc(t('total')) + '</strong></td>';
+            html += '<td class="wd-num"><strong>' + cfTotal.toFixed(2) + '</strong></td>';
+            html += '<td class="wd-num"><strong>' + cfCount + '</strong></td>';
+            html += '<td class="wd-num"><strong>' + (cfCount > 0 ? (cfTotal / cfCount).toFixed(2) : '0') + '</strong></td>';
+            html += '</tr></tfoot></table>';
+            html += '</div>';
+        }
 
         // Current queue
         html += '<div class="wd-card">';

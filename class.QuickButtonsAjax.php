@@ -997,7 +997,8 @@ class QuickButtonsAjax extends AjaxController {
             $cfDeptFilter = $deptFilter; // Reuse existing dept filter (same tk alias)
             $cfRes = db_query(
                 "SELECT l.staff_id, s.firstname, s.lastname,
-                        SUM(l.field_value) AS total,
+                        SUM(COALESCE(l.credited_value, l.field_value)) AS total,
+                        COUNT(DISTINCT l.ticket_id) AS ticket_count,
                         COUNT(*) AS cnt
                  FROM {$prefix}calculated_fields_log l
                  LEFT JOIN {$prefix}staff s ON l.staff_id = s.staff_id
@@ -1012,7 +1013,7 @@ class QuickButtonsAjax extends AjaxController {
                     $cfValues[] = array(
                         'name'  => trim($row['firstname'] . ' ' . $row['lastname']) ?: 'Agent #' . $row['staff_id'],
                         'total' => round((float) $row['total'], 2),
-                        'count' => (int) $row['cnt'],
+                        'count' => (int) $row['ticket_count'],
                     );
                 }
             }

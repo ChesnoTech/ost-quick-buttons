@@ -71,6 +71,7 @@ body {
 .wd-kpi-orange .wd-kpi-value { color: #e67e22; }
 .wd-kpi-purple .wd-kpi-value { color: #8e44ad; }
 .wd-kpi-red .wd-kpi-value { color: #e74c3c; }
+.wd-kpi-teal .wd-kpi-value { color: #1abc9c; }
 
 /* Charts Grid */
 .wd-grid {
