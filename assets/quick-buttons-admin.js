@@ -60,10 +60,13 @@
                 '</span>'
             );
         } else {
-            $launcher.html(
-                '<p style="color:#e74c3c;font-size:13px;">&#9888; Save this instance first, ' +
-                'then reopen to access the Workflow Builder.</p>'
-            );
+            // Instance not yet saved OR page URL doesn't expose xid yet.
+            // If there's a success notice on the page the instance exists — just needs a reload.
+            var justSaved = $('.notice, .success, [class*="success"]').text().toLowerCase().indexOf('success') > -1;
+            var msg = justSaved
+                ? '&#9881; <a href="javascript:location.reload()" style="color:#128DBE;">Reload the page</a> to open the Workflow Builder.'
+                : '&#9888; Save this instance first, then the Workflow Builder button will appear here.';
+            $launcher.html('<p style="font-size:13px;margin:0;">' + msg + '</p>');
         }
 
         $formRow.hide();
@@ -100,8 +103,20 @@
     }
 
     function getInstanceId() {
+        // 1. URL query string: plugins.php?id=X&xid=Y
         var m = window.location.search.match(/[?&]xid=(\d+)/);
-        return m ? m[1] : null;
+        if (m) return m[1];
+
+        // 2. Form action attribute (osTicket sets this after saving a new instance)
+        var action = $('form[method]').first().attr('action') || '';
+        m = action.match(/[?&]xid=(\d+)/);
+        if (m) return m[1];
+
+        // 3. Hidden input named xid or iid
+        var fromInput = $('input[name="xid"], input[name="iid"]').first().val();
+        if (fromInput) return fromInput;
+
+        return null;
     }
 
     function escapeHtml(str) {
