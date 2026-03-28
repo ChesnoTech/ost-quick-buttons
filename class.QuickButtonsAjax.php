@@ -409,10 +409,27 @@ class QuickButtonsAjax extends AjaxController {
             $ids = array_filter(array_map('intval', $tids));
             if ($ids) {
                 $in = implode(',', $ids);
+                // elapsed_secs: seconds since the ticket's LAST STATUS CHANGE event.
+                // We find this from ost_thread_event (event_id=9 / 'edited', data contains "status").
+                // Falls back to lastupdate if no status-change event exists (e.g. very old tickets).
                 $res = db_query(
-                    "SELECT ticket_id, topic_id, dept_id, status_id, staff_id,
-                            TIMESTAMPDIFF(SECOND, lastupdate, NOW()) AS elapsed_secs
-                     FROM " . TICKET_TABLE . " WHERE ticket_id IN ($in)");
+                    "SELECT t.ticket_id, t.topic_id, t.dept_id, t.status_id, t.staff_id,
+                            TIMESTAMPDIFF(SECOND,
+                                COALESCE(
+                                    (SELECT te.timestamp
+                                     FROM ost_thread_event te
+                                     JOIN ost_thread th ON th.id = te.thread_id
+                                     WHERE th.object_id = t.ticket_id
+                                       AND th.object_type = 'T'
+                                       AND te.event_id = 9
+                                       AND te.data LIKE '%\"status\"%'
+                                     ORDER BY te.timestamp DESC
+                                     LIMIT 1),
+                                    t.lastupdate
+                                ),
+                                NOW()
+                            ) AS elapsed_secs
+                     FROM " . TICKET_TABLE . " t WHERE t.ticket_id IN ($in)");
                 if ($res) {
                     $map = array();
                     while ($row = db_fetch_array($res)) {
