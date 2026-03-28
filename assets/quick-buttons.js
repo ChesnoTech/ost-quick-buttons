@@ -83,7 +83,9 @@
                     QA.serverNow = data.serverNow || '';
                     QA.serverOffset = 0;
                     if (QA.serverNow) {
-                        var serverMs = new Date(QA.serverNow.replace(' ', 'T') + 'Z').getTime();
+                        // Parse without 'Z' so JS uses local timezone, matching how
+                        // the server's MySQL timestamps are stored (no timezone info).
+                        var serverMs = new Date(QA.serverNow.replace(' ', 'T')).getTime();
                         QA.serverOffset = serverMs - Date.now();
                     }
                     if (data.i18n) QA.i18n = $.extend(QA.i18n, data.i18n);
@@ -243,7 +245,7 @@
                 var $el = $(this);
                 var since = $el.data('since');
                 if (!since) return;
-                var sinceMs = new Date(since.replace(' ', 'T') + 'Z').getTime();
+                var sinceMs = new Date(since.replace(' ', 'T')).getTime();
                 QA.timerBadges.push({
                     $el: $el,
                     sinceMs: sinceMs,
