@@ -59,7 +59,7 @@ Plural-Forms: nplurals=1; plural=0;
   'Trigger' => '触发条件',
   'Working' => '处理中',
   'Transfer to:' => '转移至：',
-  'Clear team on transfer' => '转移时清除团队',
+  'Also clear team assignment' => '同时清除团队分配',
   'Copy to...' => '复制到...',
   'Apply template...' => '应用模板...',
   'Single Step' => '单步操作',

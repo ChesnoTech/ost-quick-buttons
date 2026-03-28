@@ -59,7 +59,7 @@ Plural-Forms: nplurals=2; plural=(n > 1);
   'Trigger' => 'Gatilho',
   'Working' => 'Em andamento',
   'Transfer to:' => 'Transferir para:',
-  'Clear team on transfer' => 'Remover equipe ao transferir',
+  'Also clear team assignment' => 'Também limpar atribuição de equipe',
   'Copy to...' => 'Copiar para...',
   'Apply template...' => 'Aplicar modelo...',
   'Single Step' => 'Etapa única',

@@ -59,7 +59,7 @@ Plural-Forms: nplurals=2; plural=(n > 1);
   'Trigger' => 'Tetikleyici',
   'Working' => 'Devam ediyor',
   'Transfer to:' => 'Devret:',
-  'Clear team on transfer' => 'Devirde ekibi kaldır',
+  'Also clear team assignment' => 'Ayrıca takım atamasını temizle',
   'Copy to...' => 'Şuraya kopyala...',
   'Apply template...' => 'Şablon uygula...',
   'Single Step' => 'Tek Adım',

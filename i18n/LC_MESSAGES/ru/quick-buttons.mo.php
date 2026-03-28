@@ -59,7 +59,7 @@ Plural-Forms: nplurals=4; plural=((n%10==1 && n%100!=11) ? 0 : ((n%10 >= 2 && n%
   'Trigger' => 'Триггер',
   'Working' => 'В работе',
   'Transfer to:' => 'Передать в:',
-  'Clear team on transfer' => 'Очистить команду при передаче',
+  'Also clear team assignment' => 'Также снять назначение команды',
   'Copy to...' => 'Копировать в...',
   'Apply template...' => 'Применить шаблон...',
   'Single Step' => 'Один этап',

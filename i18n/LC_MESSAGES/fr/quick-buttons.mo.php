@@ -59,7 +59,7 @@ Plural-Forms: nplurals=2; plural=(n > 1);
   'Trigger' => 'Déclencheur',
   'Working' => 'En cours',
   'Transfer to:' => 'Transférer à :',
-  'Clear team on transfer' => 'Retirer l\'équipe lors du transfert',
+  'Also clear team assignment' => 'Effacer aussi l\'assignation d\'équipe',
   'Copy to...' => 'Copier vers...',
   'Apply template...' => 'Appliquer un modèle...',
   'Single Step' => 'Étape unique',

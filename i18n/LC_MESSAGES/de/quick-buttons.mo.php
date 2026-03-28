@@ -59,7 +59,7 @@ Plural-Forms: nplurals=2; plural=(n != 1);
   'Trigger' => 'Auslöser',
   'Working' => 'In Bearbeitung',
   'Transfer to:' => 'Übergeben an:',
-  'Clear team on transfer' => 'Team bei Übergabe entfernen',
+  'Also clear team assignment' => 'Auch Teamzuweisung aufheben',
   'Copy to...' => 'Kopieren nach...',
   'Apply template...' => 'Vorlage anwenden...',
   'Single Step' => 'Einzelschritt',

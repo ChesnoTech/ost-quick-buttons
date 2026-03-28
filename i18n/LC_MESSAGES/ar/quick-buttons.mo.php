@@ -59,7 +59,7 @@ Plural-Forms: nplurals=6; plural=(n==0 ? 0 : n==1 ? 1 : n==2 ? 2 : n%100>=3 && n
   'Trigger' => 'المُشغّل',
   'Working' => 'قيد العمل',
   'Transfer to:' => 'التحويل إلى:',
-  'Clear team on transfer' => 'إزالة الفريق عند التحويل',
+  'Also clear team assignment' => 'أيضاً إزالة تعيين الفريق',
   'Copy to...' => 'نسخ إلى...',
   'Apply template...' => 'تطبيق قالب...',
   'Single Step' => 'خطوة واحدة',

@@ -214,7 +214,7 @@ class QuickButtonsAjax extends AjaxController {
             'working'           => __('Working'),
             'done'              => __('Done'),
             'transferTo'        => __('Transfer to:'),
-            'clearTeam'         => __('Clear team on transfer'),
+            'clearTeam'         => __('Also clear team assignment'),
             'selectStatus'      => __('-- Select --'),
             'selectNone'        => __('-- None --'),
 

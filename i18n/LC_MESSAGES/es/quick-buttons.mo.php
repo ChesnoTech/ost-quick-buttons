@@ -59,7 +59,7 @@ Plural-Forms: nplurals=2; plural=(n != 1);
   'Trigger' => 'Disparador',
   'Working' => 'En curso',
   'Transfer to:' => 'Transferir a:',
-  'Clear team on transfer' => 'Quitar equipo al transferir',
+  'Also clear team assignment' => 'También limpiar asignación de equipo',
   'Copy to...' => 'Copiar a...',
   'Apply template...' => 'Aplicar plantilla...',
   'Single Step' => 'Paso único',
