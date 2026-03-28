@@ -298,6 +298,133 @@
             $container.html('<p style="color:#888;">Loading...</p>');
             loadDashboard($container, days);
         });
+
+        // Agent performance card (appended after grid)
+        renderAgentPerfCard($container, data, i18n);
+    }
+
+    function fmtAdminSec(s) {
+        if (s < 60)    return s + 's';
+        if (s < 3600)  return Math.round(s / 60) + 'm';
+        if (s < 86400) return (s / 3600).toFixed(1) + 'h';
+        return (s / 86400).toFixed(1) + 'd';
+    }
+
+    function renderAgentPerfCard($container, data, i18n) {
+        var stats = data.agentStats || [];
+        if (!stats.length) return;
+
+        var medals = ['\uD83E\uDD47', '\uD83E\uDD48', '\uD83E\uDD49'];
+
+        var html = '<div class="qa-dash-card qa-dash-card-full qa-ap-card">';
+        html += '<h3>' + escapeHtml(i18n.agentPerformance || 'Agent Performance by Status') + '</h3>';
+
+        // Filter bar
+        html += '<div class="qa-ap-filters">';
+        html += '<select class="qa-ap-select" id="qa-ap-dept"><option value="">' + escapeHtml(i18n.allDepartments || 'All Departments') + '</option>';
+        (data.departments || []).forEach(function(d) {
+            html += '<option value="' + escapeHtml(d.id) + '">' + escapeHtml(d.name) + '</option>';
+        });
+        html += '</select>';
+        html += '<select class="qa-ap-select" id="qa-ap-agent"><option value="">' + escapeHtml(i18n.allAgents || 'All Agents') + '</option>';
+        (data.agentList || []).forEach(function(a) {
+            html += '<option value="' + escapeHtml(a.id) + '">' + escapeHtml(a.name) + '</option>';
+        });
+        html += '</select>';
+        html += '<select class="qa-ap-select" id="qa-ap-topic"><option value="">' + escapeHtml(i18n.allTopics || 'All Topics') + '</option>';
+        (data.topics || []).forEach(function(tp) {
+            html += '<option value="' + escapeHtml(tp.id) + '">' + escapeHtml(tp.name) + '</option>';
+        });
+        html += '</select>';
+        html += '</div>';
+        html += '<div id="qa-ap-body"></div>';
+        html += '</div>';
+
+        $container.append(html);
+
+        function getFilters() {
+            return {
+                dept:  $('#qa-ap-dept').val()  || '',
+                agent: $('#qa-ap-agent').val() || '',
+                topic: $('#qa-ap-topic').val() || ''
+            };
+        }
+
+        function renderTable(filters) {
+            var filtered = stats.filter(function(r) {
+                if (filters.dept  && r.deptId  !== filters.dept)  return false;
+                if (filters.agent && r.agentId !== filters.agent) return false;
+                if (filters.topic && r.topicId !== filters.topic) return false;
+                return true;
+            });
+
+            var $body = $('#qa-ap-body');
+            if (!filtered.length) {
+                $body.html('<p style="color:#999;padding:10px 0;">No data for this period</p>');
+                return;
+            }
+
+            var groupOrder = [], groups = {};
+            filtered.forEach(function(r) {
+                if (!groups[r.statusId]) {
+                    groups[r.statusId] = { statusName: r.statusName, rows: [] };
+                    groupOrder.push(r.statusId);
+                }
+                groups[r.statusId].rows.push(r);
+            });
+
+            var t = '<div style="overflow-x:auto;"><table class="qa-dash-table qa-ap-table">';
+            t += '<thead><tr>';
+            t += '<th>' + escapeHtml(i18n.agent  || 'Agent')    + '</th>';
+            t += '<th>' + escapeHtml(i18n.avgTime || 'Avg Time') + '</th>';
+            t += '<th>' + escapeHtml(i18n.tickets || 'Tickets')  + '</th>';
+            t += '<th>' + escapeHtml(i18n.vsAvg   || 'vs Avg')   + '</th>';
+            t += '</tr></thead><tbody>';
+
+            groupOrder.forEach(function(statusId) {
+                var group  = groups[statusId];
+                var rows   = group.rows.slice().sort(function(a, b) { return a.avgSeconds - b.avgSeconds; });
+                var maxSec = rows[rows.length - 1].avgSeconds || 1;
+                var sumW = 0, sumC = 0;
+                rows.forEach(function(r) { sumW += r.avgSeconds * r.count; sumC += r.count; });
+                var teamAvg = sumC > 0 ? Math.round(sumW / sumC) : 0;
+
+                t += '<tr style="background:#f7f8fa;"><td colspan="4"><strong>' + escapeHtml(group.statusName) + '</strong>';
+                if (teamAvg > 0 && rows.length > 1) {
+                    t += ' <span style="font-weight:400;color:#999;font-size:11px;">' + escapeHtml(i18n.teamAvg || 'Team avg') + ': ' + escapeHtml(fmtAdminSec(teamAvg)) + '</span>';
+                }
+                t += '</td></tr>';
+
+                var showMedals = !filters.agent && rows.length >= 2;
+                rows.forEach(function(r, idx) {
+                    var barPct = Math.round((r.avgSeconds / maxSec) * 100);
+                    var vsHtml = '';
+                    if (teamAvg > 0 && rows.length > 1) {
+                        var pct = Math.round(((r.avgSeconds - teamAvg) / teamAvg) * 100);
+                        var color = pct < 0 ? '#27ae60' : (pct > 0 ? '#e74c3c' : '#999');
+                        vsHtml = '<span style="color:' + color + ';font-weight:600;">' + (pct > 0 ? '+' : '') + pct + '%</span>';
+                    }
+                    var nameHtml = (showMedals && idx < 3 ? medals[idx] + ' ' : '') + escapeHtml(r.agentName);
+                    var barHtml = '<div style="display:flex;align-items:center;gap:6px;">' +
+                        '<div style="flex:1;height:6px;background:#eee;border-radius:3px;min-width:40px;overflow:hidden;">' +
+                        '<div style="height:6px;background:#128DBE;border-radius:3px;width:' + barPct + '%;"></div></div>' +
+                        '<span style="font-size:12px;font-weight:600;color:#128DBE;white-space:nowrap;">' + escapeHtml(r.avgDisplay) + '</span></div>';
+
+                    t += '<tr><td>' + nameHtml + '</td><td>' + barHtml + '</td>';
+                    t += '<td><strong>' + r.count + '</strong></td>';
+                    t += '<td>' + vsHtml + '</td></tr>';
+                });
+            });
+
+            t += '</tbody></table></div>';
+            $body.html(t);
+        }
+
+        renderTable({ dept: '', agent: '', topic: '' });
+
+        $(document).on('change', '#qa-ap-dept, #qa-ap-agent, #qa-ap-topic', function() {
+            renderTable(getFilters());
+        });
     }
 
     // ================================================================

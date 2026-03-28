@@ -280,6 +280,42 @@
     flex-shrink: 0;
 }
 
+/* Agent Performance card — full-width outside the grid */
+.qa-ap-card {
+    margin-top: 15px;
+    border: 1px solid #e0e0e0;
+    border-radius: 6px;
+    padding: 12px;
+    background: #fff;
+}
+.qa-ap-card h3 {
+    margin: 0 0 10px 0;
+    font-size: 14px;
+    color: #333;
+    border-bottom: 1px solid #eee;
+    padding-bottom: 6px;
+}
+
+.qa-ap-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 10px;
+}
+.qa-ap-select {
+    padding: 4px 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 12px;
+    color: #555;
+    background: #fff;
+    cursor: pointer;
+}
+.qa-ap-select:focus { border-color: #128DBE; outline: none; }
+
+.qa-ap-table { width: 100%; }
+.qa-ap-table tbody tr[style*="background"] td { font-size: 12px; padding: 6px 8px; }
+
 /* Dashboard dark mode */
 .dark-mode .qa-dash-card {
     background: #161b22;
@@ -312,6 +348,20 @@
 
 .dark-mode .qa-dash-period {
     background: #21262d;
+    border-color: #30363d;
+    color: #c9d1d9;
+}
+
+.dark-mode .qa-ap-card {
+    background: #161b22;
+    border-color: #30363d;
+}
+.dark-mode .qa-ap-card h3 {
+    color: #c9d1d9;
+    border-color: #21262d;
+}
+.dark-mode .qa-ap-select {
+    background: #0d1117;
     border-color: #30363d;
     color: #c9d1d9;
 }

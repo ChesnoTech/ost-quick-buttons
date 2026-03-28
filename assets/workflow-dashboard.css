@@ -181,11 +181,152 @@ body {
     .wd-controls { align-items: stretch; }
     .wd-date-range { flex-wrap: wrap; }
     .wd-kpis, .wd-grid { padding-left: 16px; padding-right: 16px; }
+    .wd-ap-card { margin-left: 16px; margin-right: 16px; }
+    .wd-ap-header { flex-direction: column; align-items: flex-start; }
 }
 @media (max-width: 480px) {
     .wd-kpis { grid-template-columns: 1fr; }
     .wd-kpi-value { font-size: 26px; }
 }
+
+/* ======================================================
+   AGENT PERFORMANCE CARD (.wd-ap-*)
+   ====================================================== */
+
+/* Card sits outside .wd-grid — match grid's edge padding */
+.wd-ap-card {
+    margin: 0 32px 32px;
+}
+
+/* Title row + filter bar */
+.wd-ap-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 16px;
+}
+.wd-ap-header h3 { margin: 0; }
+
+.wd-ap-filters {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.wd-ap-select {
+    padding: 5px 10px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    font-size: 12px;
+    color: #555;
+    background: #fff;
+    cursor: pointer;
+    outline: none;
+    transition: border-color 0.15s;
+}
+.wd-ap-select:focus { border-color: #128DBE; }
+
+/* Horizontal scroll wrapper for wide tables on small screens */
+.wd-ap-scroll { overflow-x: auto; }
+
+/* Table */
+.wd-ap-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+.wd-ap-table th {
+    text-align: left;
+    padding: 8px 12px;
+    border-bottom: 2px solid #eee;
+    color: #888;
+    font-weight: 600;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+}
+.wd-ap-th-name { width: 22%; }
+.wd-ap-th-time { width: 45%; }
+.wd-ap-table .wd-num { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
+
+/* Status group header row */
+.wd-ap-status-header td {
+    padding: 10px 12px 4px;
+    background: #f7f8fa;
+    font-size: 13px;
+    color: #444;
+    border-top: 2px solid #e8eaed;
+    border-bottom: none;
+}
+.wd-ap-table tbody .wd-ap-status-header:first-child td { border-top: none; }
+
+.wd-ap-team-avg {
+    font-size: 11px;
+    font-weight: 400;
+    color: #999;
+    margin-left: 8px;
+}
+
+/* Agent data rows */
+.wd-ap-row td {
+    padding: 8px 12px;
+    border-bottom: 1px solid #f5f5f5;
+    vertical-align: middle;
+}
+.wd-ap-table .wd-ap-row:hover td { background: #fafbfc; }
+
+/* Agent name cell */
+.wd-ap-name-cell {
+    white-space: nowrap;
+    font-weight: 500;
+}
+.wd-ap-medal {
+    margin-right: 4px;
+    font-style: normal;
+}
+
+/* Bar cell */
+.wd-ap-bar-cell { min-width: 180px; }
+.wd-ap-bar-wrap {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.wd-ap-bar-track {
+    flex: 1;
+    height: 8px;
+    background: #f0f2f5;
+    border-radius: 4px;
+    overflow: hidden;
+    min-width: 40px;
+}
+.wd-ap-bar-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #128DBE, #1aa3d9);
+    border-radius: 4px;
+    transition: width 0.4s ease-out;
+    min-width: 2px;
+}
+.wd-ap-bar-lbl {
+    font-size: 12px;
+    font-weight: 600;
+    color: #128DBE;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+    min-width: 36px;
+}
+
+/* vs Avg column */
+.wd-ap-vs-neg { color: #27ae60; font-weight: 600; }  /* faster = green */
+.wd-ap-vs-pos { color: #e74c3c; font-weight: 600; }  /* slower = red  */
+
+/* ======================================================
+   DARK MODE — Agent Performance
+   ====================================================== */
 
 /* Dark mode */
 @media (prefers-color-scheme: dark) {
@@ -204,4 +345,14 @@ body {
     .wd-agent-row, .wd-queue-row { border-color: #2a2a2a; }
     .wd-queue-count { background: #1a2a3a; }
     .wd-period-btn { border-color: rgba(255,255,255,0.15); }
+    /* Agent performance dark mode */
+    .wd-ap-select { background: #2a2a2a; border-color: #444; color: #ccc; }
+    .wd-ap-select:focus { border-color: #128DBE; }
+    .wd-ap-table th { border-color: #333; color: #666; }
+    .wd-ap-status-header td { background: #2a2a2a; color: #bbb; border-color: #333; }
+    .wd-ap-row td { border-color: #2a2a2a; }
+    .wd-ap-table .wd-ap-row:hover td { background: #2a2a2a; }
+    .wd-ap-bar-track { background: #333; }
+    .wd-ap-bar-lbl { color: #4fc3f7; }
+    .wd-ap-team-avg { color: #666; }
 }

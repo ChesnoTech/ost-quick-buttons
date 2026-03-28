@@ -244,6 +244,185 @@
 
         html += '</div>'; // grid
         container.innerHTML = html;
+
+        // Agent performance card (uses DOM manipulation, appended after grid)
+        if (data.agentStats && data.agentStats.length) {
+            renderAgentStats(container, data);
+        }
+    }
+
+    function fmtSec(totalSec) {
+        if (totalSec < 60)    return totalSec + 's';
+        if (totalSec < 3600)  return Math.round(totalSec / 60) + 'm';
+        if (totalSec < 86400) return (totalSec / 3600).toFixed(1) + 'h';
+        return (totalSec / 86400).toFixed(1) + 'd';
+    }
+
+    function renderAgentStats(container, data) {
+        var stats = data.agentStats || [];
+        if (!stats.length) return;
+
+        var card = document.createElement('div');
+        card.className = 'wd-card wd-card-full wd-ap-card';
+
+        // Build filter dropdowns
+        var fh = '<div class="wd-ap-header">';
+        fh += '<h3>' + esc(t('agentPerformance')) + '</h3>';
+        fh += '<div class="wd-ap-filters">';
+
+        fh += '<select class="wd-ap-select" id="wd-ap-dept"><option value="">' + esc(t('allDepartments')) + '</option>';
+        (data.departments || []).forEach(function(d) {
+            fh += '<option value="' + esc(d.id) + '">' + esc(d.name) + '</option>';
+        });
+        fh += '</select>';
+
+        fh += '<select class="wd-ap-select" id="wd-ap-agent"><option value="">' + esc(t('allAgents')) + '</option>';
+        (data.agentList || []).forEach(function(a) {
+            fh += '<option value="' + esc(a.id) + '">' + esc(a.name) + '</option>';
+        });
+        fh += '</select>';
+
+        fh += '<select class="wd-ap-select" id="wd-ap-topic"><option value="">' + esc(t('allTopics')) + '</option>';
+        (data.topics || []).forEach(function(tp) {
+            fh += '<option value="' + esc(tp.id) + '">' + esc(tp.name) + '</option>';
+        });
+        fh += '</select>';
+
+        fh += '</div></div>';
+        fh += '<div id="wd-ap-body"></div>';
+        card.innerHTML = fh;
+
+        // Insert after the grid
+        var grid = container.querySelector('.wd-grid');
+        if (grid && grid.parentNode) {
+            grid.parentNode.insertBefore(card, grid.nextSibling);
+        } else {
+            container.appendChild(card);
+        }
+
+        function getFilters() {
+            var dEl = document.getElementById('wd-ap-dept');
+            var aEl = document.getElementById('wd-ap-agent');
+            var tEl = document.getElementById('wd-ap-topic');
+            return {
+                dept:  dEl  ? dEl.value  : '',
+                agent: aEl  ? aEl.value  : '',
+                topic: tEl  ? tEl.value  : ''
+            };
+        }
+
+        function renderTable(filters) {
+            // Filter rows
+            var filtered = stats.filter(function(r) {
+                if (filters.dept  && r.deptId  !== filters.dept)  return false;
+                if (filters.agent && r.agentId !== filters.agent) return false;
+                if (filters.topic && r.topicId !== filters.topic) return false;
+                return true;
+            });
+
+            var body = document.getElementById('wd-ap-body');
+            if (!body) return;
+
+            if (!filtered.length) {
+                body.innerHTML = '<div style="color:#999;padding:20px;text-align:center;">' + esc(t('noData')) + '</div>';
+                return;
+            }
+
+            // Group by statusId, aggregate by agentId within each group
+            // (same agent may appear in multiple dept/topic combos when filters are "All")
+            var groupOrder = [];
+            var groups = {};
+            filtered.forEach(function(r) {
+                if (!groups[r.statusId]) {
+                    groups[r.statusId] = { statusName: r.statusName, byAgent: {} };
+                    groupOrder.push(r.statusId);
+                }
+                var ba = groups[r.statusId].byAgent;
+                if (!ba[r.agentId]) {
+                    ba[r.agentId] = { agentId: r.agentId, agentName: r.agentName, totalSec: 0, totalCount: 0 };
+                }
+                ba[r.agentId].totalSec   += r.avgSeconds * r.count;
+                ba[r.agentId].totalCount += r.count;
+            });
+            // Build sorted rows array from aggregated agents
+            groupOrder.forEach(function(statusId) {
+                var ba = groups[statusId].byAgent;
+                groups[statusId].rows = Object.keys(ba).map(function(aid) {
+                    var a = ba[aid];
+                    var avgSec = a.totalCount > 0 ? Math.round(a.totalSec / a.totalCount) : 0;
+                    return { agentId: a.agentId, agentName: a.agentName,
+                             avgSeconds: avgSec, avgDisplay: fmtSec(avgSec), count: a.totalCount };
+                });
+            });
+
+            var medals = ['🥇', '🥈', '🥉'];
+
+            var html = '<div class="wd-ap-scroll"><table class="wd-ap-table">';
+            html += '<thead><tr>';
+            html += '<th class="wd-ap-th-name">' + esc(t('agent')) + '</th>';
+            html += '<th class="wd-ap-th-time">' + esc(t('avgTime')) + '</th>';
+            html += '<th class="wd-num">' + esc(t('tickets')) + '</th>';
+            html += '<th class="wd-num">' + esc(t('vsAvg')) + '</th>';
+            html += '</tr></thead><tbody>';
+
+            groupOrder.forEach(function(statusId) {
+                var group  = groups[statusId];
+                var rows   = group.rows.slice().sort(function(a, b) { return a.avgSeconds - b.avgSeconds; });
+                var maxSec = rows[rows.length - 1].avgSeconds || 1;
+
+                // Weighted team average
+                var sumW = 0, sumC = 0;
+                rows.forEach(function(r) { sumW += r.avgSeconds * r.count; sumC += r.count; });
+                var teamAvg = sumC > 0 ? Math.round(sumW / sumC) : 0;
+
+                // Status group header
+                html += '<tr class="wd-ap-status-header">';
+                html += '<td colspan="2"><strong>' + esc(group.statusName) + '</strong>';
+                if (teamAvg > 0 && rows.length > 1) {
+                    html += ' <span class="wd-ap-team-avg">' + esc(t('teamAvg')) + ': ' + esc(fmtSec(teamAvg)) + '</span>';
+                }
+                html += '</td><td></td><td></td></tr>';
+
+                var showMedals = !filters.agent && rows.length >= 2;
+
+                rows.forEach(function(r, idx) {
+                    var barPct = Math.round((r.avgSeconds / maxSec) * 100);
+                    var vsHtml = '';
+                    if (teamAvg > 0 && rows.length > 1) {
+                        var pct = Math.round(((r.avgSeconds - teamAvg) / teamAvg) * 100);
+                        var cls = pct < 0 ? 'wd-ap-vs-neg' : (pct > 0 ? 'wd-ap-vs-pos' : '');
+                        vsHtml = '<span class="' + cls + '">' + (pct > 0 ? '+' : '') + pct + '%</span>';
+                    }
+
+                    html += '<tr class="wd-ap-row">';
+                    html += '<td class="wd-ap-name-cell">';
+                    if (showMedals && idx < 3) {
+                        html += '<span class="wd-ap-medal">' + medals[idx] + '</span>';
+                    }
+                    html += esc(r.agentName) + '</td>';
+                    html += '<td class="wd-ap-bar-cell">';
+                    html += '<div class="wd-ap-bar-wrap">';
+                    html += '<div class="wd-ap-bar-track"><div class="wd-ap-bar-fill" style="width:' + barPct + '%"></div></div>';
+                    html += '<span class="wd-ap-bar-lbl">' + esc(r.avgDisplay) + '</span>';
+                    html += '</div></td>';
+                    html += '<td class="wd-num">' + r.count + '</td>';
+                    html += '<td class="wd-num">' + vsHtml + '</td>';
+                    html += '</tr>';
+                });
+            });
+
+            html += '</tbody></table></div>';
+            body.innerHTML = html;
+        }
+
+        // Initial render
+        renderTable({ dept: '', agent: '', topic: '' });
+
+        // Wire filter changes
+        ['wd-ap-dept', 'wd-ap-agent', 'wd-ap-topic'].forEach(function(id) {
+            var el = document.getElementById(id);
+            if (el) el.addEventListener('change', function() { renderTable(getFilters()); });
+        });
     }
 
     function kpiCard(color, label, value, sub) {

@@ -830,6 +830,13 @@ class QuickButtonsAjax extends AjaxController {
                 'to'                => __('To'),
                 'apply'             => __('Apply'),
                 'noData'            => __('No data for this period'),
+                'agentPerformance'  => __('Agent Performance by Status'),
+                'allDepartments'    => __('All Departments'),
+                'allAgents'         => __('All Agents'),
+                'allTopics'         => __('All Topics'),
+                'teamAvg'           => __('Team avg'),
+                'vsAvg'             => __('vs Avg'),
+                'department'        => __('Department'),
             ),
         );
 
@@ -922,8 +929,10 @@ class QuickButtonsAjax extends AjaxController {
                 $daily[] = array('day' => $row['day'], 'count' => (int) $row['cnt']);
 
         // 2. Average time per step (time between consecutive status changes per ticket)
+        //    Also accumulates per-agent/dept/topic breakdown in $agentGrid.
         $stepTimesRes = db_query(
-            "SELECT t.object_id as ticket_id, e.data, e.timestamp
+            "SELECT t.object_id as ticket_id, e.data, e.timestamp,
+                    e.staff_id, e.topic_id, tk.dept_id
              FROM ost_thread_event e
              JOIN ost_thread t ON e.thread_id = t.id AND t.object_type = 'T'
              JOIN ost_ticket tk ON t.object_id = tk.ticket_id
@@ -933,22 +942,37 @@ class QuickButtonsAjax extends AjaxController {
                {$deptFilter} {$staffFilter}
              ORDER BY t.object_id, e.timestamp");
         $stepDurations = array();
-        $prevByTicket = array();
+        $agentGrid     = array(); // [$statusKey][$deptId][$topicId][$staffId] = [total, count]
+        $prevByTicket  = array();
         if ($stepTimesRes) {
             while ($row = db_fetch_array($stepTimesRes)) {
                 $tid = $row['ticket_id'];
                 $eventData = @json_decode($row['data'], true);
                 $statusId = $eventData['status'] ?? null;
+                if (is_array($statusId)) $statusId = $statusId[0]; // handle [id,"name"] format
                 if (!$statusId) continue;
 
                 if (isset($prevByTicket[$tid])) {
-                    $prev = $prevByTicket[$tid];
+                    $prev     = $prevByTicket[$tid];
                     $duration = strtotime($row['timestamp']) - strtotime($prev['time']);
-                    $key = $prev['status'];
+                    $key      = $prev['status'];
+
+                    // avgTimes accumulation (existing)
                     if (!isset($stepDurations[$key]))
                         $stepDurations[$key] = array('total' => 0, 'count' => 0);
                     $stepDurations[$key]['total'] += $duration;
                     $stepDurations[$key]['count']++;
+
+                    // agentGrid accumulation — agent = exit event's staff_id
+                    $agentId = (int) $row['staff_id'];
+                    $topicId = (int) $row['topic_id'];
+                    $deptId  = (int) $row['dept_id'];
+                    if ($agentId > 0 && $duration > 0) {
+                        if (!isset($agentGrid[$key][$deptId][$topicId][$agentId]))
+                            $agentGrid[$key][$deptId][$topicId][$agentId] = array('total' => 0, 'count' => 0);
+                        $agentGrid[$key][$deptId][$topicId][$agentId]['total'] += $duration;
+                        $agentGrid[$key][$deptId][$topicId][$agentId]['count']++;
+                    }
                 }
                 $prevByTicket[$tid] = array('status' => (string) $statusId, 'time' => $row['timestamp']);
             }
@@ -967,6 +991,66 @@ class QuickButtonsAjax extends AjaxController {
                 'count'      => $data['count'],
             );
         }
+
+        // Build agent performance flat array from $agentGrid
+        // Pre-load lookup maps (one query each — small tables)
+        $staffNames = array();
+        $snRes = db_query("SELECT staff_id, firstname, lastname FROM ost_staff");
+        if ($snRes) while ($r = db_fetch_array($snRes))
+            $staffNames[(int)$r['staff_id']] = trim($r['firstname'] . ' ' . $r['lastname']) ?: __('Unknown');
+
+        $topicNames = array();
+        $tnRes = db_query("SELECT topic_id, topic FROM ost_help_topic");
+        if ($tnRes) while ($r = db_fetch_array($tnRes))
+            $topicNames[(int)$r['topic_id']] = $r['topic'];
+
+        $deptNames = array();
+        $dnRes = db_query("SELECT id, name FROM ost_department");
+        if ($dnRes) while ($r = db_fetch_array($dnRes))
+            $deptNames[(int)$r['id']] = $r['name'];
+
+        $agentStats     = array();
+        $distinctDepts  = array();
+        $distinctTopics = array();
+        $distinctAgents = array();
+
+        foreach ($agentGrid as $statusKey => $byDept) {
+            $statusObj  = TicketStatus::lookup($statusKey);
+            $statusName = $statusObj ? $statusObj->getName() : __('Unknown');
+            foreach ($byDept as $deptId => $byTopic) {
+                $deptName = isset($deptNames[$deptId]) ? $deptNames[$deptId] : __('Unknown');
+                foreach ($byTopic as $topicId => $byAgent) {
+                    $topicName = isset($topicNames[$topicId]) ? $topicNames[$topicId] : __('Unknown');
+                    foreach ($byAgent as $agentId => $data) {
+                        $agentName = isset($staffNames[$agentId]) ? $staffNames[$agentId] : (__('Agent') . ' #' . $agentId);
+                        $avgSec    = $data['count'] > 0 ? round($data['total'] / $data['count']) : 0;
+                        $agentStats[] = array(
+                            'statusId'   => (string) $statusKey,
+                            'statusName' => $statusName,
+                            'deptId'     => (string) $deptId,
+                            'deptName'   => $deptName,
+                            'topicId'    => (string) $topicId,
+                            'topicName'  => $topicName,
+                            'agentId'    => (string) $agentId,
+                            'agentName'  => $agentName,
+                            'avgSeconds' => $avgSec,
+                            'avgDisplay' => self::formatDuration($avgSec),
+                            'count'      => $data['count'],
+                        );
+                        $distinctDepts[$deptId]   = array('id' => (string) $deptId,  'name' => $deptName);
+                        $distinctTopics[$topicId] = array('id' => (string) $topicId, 'name' => $topicName);
+                        $distinctAgents[$agentId] = array('id' => (string) $agentId, 'name' => $agentName);
+                    }
+                }
+            }
+        }
+
+        $deptList  = array_values($distinctDepts);
+        $topicList = array_values($distinctTopics);
+        $agentList = array_values($distinctAgents);
+        usort($deptList,  function($a, $b) { return strcmp($a['name'], $b['name']); });
+        usort($topicList, function($a, $b) { return strcmp($a['name'], $b['name']); });
+        usort($agentList, function($a, $b) { return strcmp($a['name'], $b['name']); });
 
         // 3. Agent leaderboard (claims in period)
         // Access-limited agents only see their own stats
@@ -1057,12 +1141,16 @@ class QuickButtonsAjax extends AjaxController {
             'from'     => $from,
             'to'       => $to,
             'weekly'   => $days > 60,
-            'daily'    => $daily,
-            'avgTimes' => $avgTimes,
-            'agents'   => $agents,
-            'queue'    => $queue,
-            'cfValues' => $cfValues,
-            'isLimited'=> $isLimited,
+            'daily'       => $daily,
+            'avgTimes'    => $avgTimes,
+            'agentStats'  => $agentStats,
+            'departments' => $deptList,
+            'topics'      => $topicList,
+            'agentList'   => $agentList,
+            'agents'      => $agents,
+            'queue'       => $queue,
+            'cfValues'    => $cfValues,
+            'isLimited'   => $isLimited,
             'kpi'      => array(
                 'totalProcessed' => $totalProcessed,
                 'avgPerDay'      => $avgPerDay,
