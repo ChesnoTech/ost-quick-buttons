@@ -11,6 +11,7 @@ require_once INCLUDE_DIR . 'class.ajax.php';
 require_once INCLUDE_DIR . 'class.ticket.php';
 require_once INCLUDE_DIR . 'class.forms.php';
 require_once INCLUDE_DIR . 'class.dept.php';
+require_once INCLUDE_DIR . 'class.topic.php';
 require_once INCLUDE_DIR . 'class.list.php';
 require_once INCLUDE_DIR . 'class.plugin.php';
 
@@ -1066,14 +1067,18 @@ class QuickButtonsAjax extends AjaxController {
             $staffNames[(int)$r['staff_id']] = trim($r['firstname'] . ' ' . $r['lastname']) ?: __('Unknown');
 
         $topicNames = array();
-        $tnRes = db_query("SELECT topic_id, topic FROM " . TOPIC_TABLE);
-        if ($tnRes) while ($r = db_fetch_array($tnRes))
-            $topicNames[(int)$r['topic_id']] = $r['topic'];
+        $tnRes = db_query("SELECT topic_id FROM " . TOPIC_TABLE);
+        if ($tnRes) while ($r = db_fetch_array($tnRes)) {
+            $tObj = Topic::lookup((int) $r['topic_id']);
+            $topicNames[(int)$r['topic_id']] = $tObj ? ($tObj->getLocalName() ?: $tObj->getName()) : ('Topic #' . $r['topic_id']);
+        }
 
         $deptNames = array();
-        $dnRes = db_query("SELECT id, name FROM " . DEPT_TABLE);
-        if ($dnRes) while ($r = db_fetch_array($dnRes))
-            $deptNames[(int)$r['id']] = $r['name'];
+        $dnRes = db_query("SELECT id FROM " . DEPT_TABLE);
+        if ($dnRes) while ($r = db_fetch_array($dnRes)) {
+            $dObj = Dept::lookup((int) $r['id']);
+            $deptNames[(int)$r['id']] = $dObj ? ($dObj->getLocalName() ?: $dObj->getName()) : ('Dept #' . $r['id']);
+        }
 
         $agentStats = array();
 
@@ -1461,17 +1466,24 @@ class QuickButtonsAjax extends AjaxController {
 
         $map = self::loadDeptStatusMap();
 
-        // All departments
+        // All departments (Dept::getName() returns translated name)
         $depts = array();
-        $dRes = db_query("SELECT id, name FROM " . DEPT_TABLE . " ORDER BY name");
-        if ($dRes) while ($r = db_fetch_array($dRes))
-            $depts[] = array('id' => (string) $r['id'], 'name' => $r['name']);
+        $dRes = db_query("SELECT id FROM " . DEPT_TABLE . " ORDER BY name");
+        if ($dRes) while ($r = db_fetch_array($dRes)) {
+            $dept = Dept::lookup((int) $r['id']);
+            $depts[] = array('id' => (string) $r['id'], 'name' => $dept ? ($dept->getLocalName() ?: $dept->getName()) : ('Dept #' . $r['id']));
+        }
+        usort($depts, function($a, $b) { return strcmp($a['name'], $b['name']); });
 
-        // All open statuses
+        // All open statuses (use TicketStatus ORM for translated names)
         $statuses = array();
-        $sRes = db_query("SELECT id, name FROM " . TICKET_STATUS_TABLE . " WHERE state='open' ORDER BY sort, name");
-        if ($sRes) while ($r = db_fetch_array($sRes))
-            $statuses[] = array('id' => (string) $r['id'], 'name' => $r['name']);
+        if ($items = TicketStatusList::getStatuses(array('enabled' => true))) {
+            foreach ($items as $s) {
+                if ($s->getState() === 'open') {
+                    $statuses[] = array('id' => (string) $s->getId(), 'name' => $s->getName());
+                }
+            }
+        }
 
         return $this->json_encode(array(
             'map'          => $map,
