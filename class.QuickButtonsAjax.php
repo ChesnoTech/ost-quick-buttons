@@ -840,7 +840,65 @@ class QuickButtonsAjax extends AjaxController {
             ),
         );
 
-        $json = json_encode($data, JSON_UNESCAPED_UNICODE);
+        $json = json_encode($data, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG);
+        $dir = dirname(__FILE__) . '/assets/';
+        $css = file_exists($dir . 'workflow-dashboard.css') ? file_get_contents($dir . 'workflow-dashboard.css') : '';
+        $js  = file_exists($dir . 'workflow-dashboard.js') ? file_get_contents($dir . 'workflow-dashboard.js') : '';
+
+        // Detect system language for date picker locale (week starts Monday in ru)
+        $lang = 'en';
+        if (class_exists('Internationalization')) {
+            $sysLang = Internationalization::getCurrentLanguage();
+            if ($sysLang) $lang = str_replace('_', '-', $sysLang);
+        }
+
+        header('Content-Type: text/html; charset=utf-8');
+        echo '<!DOCTYPE html>
+<html lang="' . htmlspecialchars($lang) . '">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>' . __('Workflow Dashboard') . '</title>
+<style>' . $css . '</style>
+</head>
+<body>
+<div id="wd-app"></div>
+<script>var WD_DATA = ' . $json . ';</script>
+<script>' . $js . '</script>
+</body>
+</html>';
+        exit;
+    }
+
+    function serveAgentPerfPage() {
+        $this->requireStaff();
+
+        $data = array(
+            'apiUrl'    => ROOT_PATH . 'scp/ajax.php/quick-buttons/dashboard',
+            'csrfToken' => $this->getCsrfToken(),
+            'mode'      => 'agent-perf',
+            'i18n'      => array(
+                'agentPerformance'  => __('Agent Performance by Status'),
+                'allDepartments'    => __('All Departments'),
+                'allAgents'         => __('All Agents'),
+                'allTopics'         => __('All Topics'),
+                'teamAvg'           => __('Team avg'),
+                'vsAvg'             => __('vs Avg'),
+                'agent'             => __('Agent'),
+                'avgTime'           => __('Avg Time'),
+                'tickets'           => __('Tickets'),
+                'noData'            => __('No data for this period'),
+                'loading'           => __('Loading...'),
+                'last7'             => __('7 Days'),
+                'last30'            => __('30 Days'),
+                'last90'            => __('90 Days'),
+                'from'              => __('From'),
+                'to'                => __('To'),
+                'apply'             => __('Apply'),
+            ),
+        );
+
+        $json = json_encode($data, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG);
         $dir = dirname(__FILE__) . '/assets/';
         $css = file_exists($dir . 'workflow-dashboard.css') ? file_get_contents($dir . 'workflow-dashboard.css') : '';
         $js  = file_exists($dir . 'workflow-dashboard.js') ? file_get_contents($dir . 'workflow-dashboard.js') : '';
@@ -851,7 +909,7 @@ class QuickButtonsAjax extends AjaxController {
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>' . __('Workflow Dashboard') . '</title>
+<title>' . __('Agent Performance') . '</title>
 <style>' . $css . '</style>
 </head>
 <body>
@@ -880,9 +938,11 @@ class QuickButtonsAjax extends AjaxController {
         // Date range: support both ?days=N and ?from=YYYY-MM-DD&to=YYYY-MM-DD
         $from = $_GET['from'] ?? null;
         $to   = $_GET['to'] ?? null;
-        if ($from && $to) {
-            $from = date('Y-m-d', strtotime($from));
-            $to   = date('Y-m-d', strtotime($to));
+        $fromTs = $from ? strtotime($from) : false;
+        $toTs   = $to ? strtotime($to) : false;
+        if ($fromTs !== false && $toTs !== false && $fromTs > 0 && $toTs > 0) {
+            $from = date('Y-m-d', $fromTs);
+            $to   = date('Y-m-d', $toTs);
             if ($from > $to) { $tmp = $from; $from = $to; $to = $tmp; }
             $since = $from . ' 00:00:00';
             $until = $to . ' 23:59:59';
@@ -896,17 +956,22 @@ class QuickButtonsAjax extends AjaxController {
         }
 
         // Access control: filter by agent's accessible departments
-        $deptFilter = '';
+        $deptFilter = '';     // for queries using tk.dept_id
+        $deptFilterE = '';    // for queries using e.dept_id (event-time dept)
         $isLimited = $thisstaff->isAccessLimited();
         $accessDepts = $thisstaff->getDepts();
         if (!$thisstaff->isAdmin() && $accessDepts) {
             $deptIds = array_map('intval', $accessDepts);
-            $deptFilter = ' AND tk.dept_id IN (' . implode(',', $deptIds) . ')';
+            $deptFilter  = ' AND tk.dept_id IN (' . implode(',', $deptIds) . ')';
+            $deptFilterE = ' AND e.dept_id IN (' . implode(',', $deptIds) . ')';
         }
-        // If access-limited, also filter by staff assignment
+        // If access-limited, also filter by event performer (not ticket assignment)
         $staffFilter = '';
+        $staffFilterE = '';
         if ($isLimited) {
-            $staffFilter = ' AND (tk.staff_id = ' . (int) $thisstaff->getId() . ')';
+            $myId = (int) $thisstaff->getId();
+            $staffFilter  = ' AND (tk.staff_id = ' . $myId . ')';
+            $staffFilterE = ' AND (e.staff_id = ' . $myId . ')';
         }
 
         // 1. Tickets processed per day (status change events)
@@ -914,11 +979,11 @@ class QuickButtonsAjax extends AjaxController {
         $groupExpr = $days > 60 ? "DATE_FORMAT(e.timestamp, '%Y-W%v')" : "DATE(e.timestamp)";
         $dailyRes = db_query(
             "SELECT {$groupExpr} as day, COUNT(*) as cnt
-             FROM ost_thread_event e
-             JOIN ost_thread t ON e.thread_id = t.id AND t.object_type = 'T'
-             JOIN ost_ticket tk ON t.object_id = tk.ticket_id
-             WHERE e.event_id = " . self::EVENT_STATUS_CHANGE . " AND e.timestamp >= '{$since}'
-               AND e.timestamp <= '{$until}'
+             FROM " . THREAD_EVENT_TABLE . " e
+             JOIN " . THREAD_TABLE . " t ON e.thread_id = t.id AND t.object_type = 'T'
+             JOIN " . TICKET_TABLE . " tk ON t.object_id = tk.ticket_id
+             WHERE e.event_id = " . self::EVENT_STATUS_CHANGE . " AND e.timestamp >= '" . db_input($since, false) . "'
+               AND e.timestamp <= '" . db_input($until, false) . "'
                AND e.data LIKE '%\"status\"%'
                {$deptFilter} {$staffFilter}
              GROUP BY day
@@ -932,14 +997,13 @@ class QuickButtonsAjax extends AjaxController {
         //    Also accumulates per-agent/dept/topic breakdown in $agentGrid.
         $stepTimesRes = db_query(
             "SELECT t.object_id as ticket_id, e.data, e.timestamp,
-                    e.staff_id, e.topic_id, tk.dept_id
-             FROM ost_thread_event e
-             JOIN ost_thread t ON e.thread_id = t.id AND t.object_type = 'T'
-             JOIN ost_ticket tk ON t.object_id = tk.ticket_id
-             WHERE e.event_id = " . self::EVENT_STATUS_CHANGE . " AND e.timestamp >= '{$since}'
-               AND e.timestamp <= '{$until}'
+                    e.staff_id, e.topic_id, e.dept_id
+             FROM " . THREAD_EVENT_TABLE . " e
+             JOIN " . THREAD_TABLE . " t ON e.thread_id = t.id AND t.object_type = 'T'
+             WHERE e.event_id = " . self::EVENT_STATUS_CHANGE . " AND e.timestamp >= '" . db_input($since, false) . "'
+               AND e.timestamp <= '" . db_input($until, false) . "'
                AND e.data LIKE '%\"status\"%'
-               {$deptFilter} {$staffFilter}
+               {$deptFilterE} {$staffFilterE}
              ORDER BY t.object_id, e.timestamp");
         $stepDurations = array();
         $agentGrid     = array(); // [$statusKey][$deptId][$topicId][$staffId] = [total, count]
@@ -948,6 +1012,7 @@ class QuickButtonsAjax extends AjaxController {
             while ($row = db_fetch_array($stepTimesRes)) {
                 $tid = $row['ticket_id'];
                 $eventData = @json_decode($row['data'], true);
+                if (!is_array($eventData)) continue;
                 $statusId = $eventData['status'] ?? null;
                 if (is_array($statusId)) $statusId = $statusId[0]; // handle [id,"name"] format
                 if (!$statusId) continue;
@@ -955,6 +1020,7 @@ class QuickButtonsAjax extends AjaxController {
                 if (isset($prevByTicket[$tid])) {
                     $prev     = $prevByTicket[$tid];
                     $duration = strtotime($row['timestamp']) - strtotime($prev['time']);
+                    if ($duration <= 0) { $prevByTicket[$tid] = array('status' => (string) $statusId, 'time' => $row['timestamp']); continue; }
                     $key      = $prev['status'];
 
                     // avgTimes accumulation (existing)
@@ -967,7 +1033,7 @@ class QuickButtonsAjax extends AjaxController {
                     $agentId = (int) $row['staff_id'];
                     $topicId = (int) $row['topic_id'];
                     $deptId  = (int) $row['dept_id'];
-                    if ($agentId > 0 && $duration > 0) {
+                    if ($agentId > 0) {
                         if (!isset($agentGrid[$key][$deptId][$topicId][$agentId]))
                             $agentGrid[$key][$deptId][$topicId][$agentId] = array('total' => 0, 'count' => 0);
                         $agentGrid[$key][$deptId][$topicId][$agentId]['total'] += $duration;
@@ -984,7 +1050,7 @@ class QuickButtonsAjax extends AjaxController {
             $status = TicketStatus::lookup($statusId);
             $avgSec = $data['count'] > 0 ? round($data['total'] / $data['count']) : 0;
             $avgTimes[] = array(
-                'statusId'   => $statusId,
+                'statusId'   => (string) $statusId,
                 'statusName' => $status ? $status->getName() : __('Unknown'),
                 'avgSeconds' => $avgSec,
                 'avgDisplay' => self::formatDuration($avgSec),
@@ -995,24 +1061,21 @@ class QuickButtonsAjax extends AjaxController {
         // Build agent performance flat array from $agentGrid
         // Pre-load lookup maps (one query each — small tables)
         $staffNames = array();
-        $snRes = db_query("SELECT staff_id, firstname, lastname FROM ost_staff");
+        $snRes = db_query("SELECT staff_id, firstname, lastname FROM " . STAFF_TABLE);
         if ($snRes) while ($r = db_fetch_array($snRes))
             $staffNames[(int)$r['staff_id']] = trim($r['firstname'] . ' ' . $r['lastname']) ?: __('Unknown');
 
         $topicNames = array();
-        $tnRes = db_query("SELECT topic_id, topic FROM ost_help_topic");
+        $tnRes = db_query("SELECT topic_id, topic FROM " . TOPIC_TABLE);
         if ($tnRes) while ($r = db_fetch_array($tnRes))
             $topicNames[(int)$r['topic_id']] = $r['topic'];
 
         $deptNames = array();
-        $dnRes = db_query("SELECT id, name FROM ost_department");
+        $dnRes = db_query("SELECT id, name FROM " . DEPT_TABLE);
         if ($dnRes) while ($r = db_fetch_array($dnRes))
             $deptNames[(int)$r['id']] = $r['name'];
 
-        $agentStats     = array();
-        $distinctDepts  = array();
-        $distinctTopics = array();
-        $distinctAgents = array();
+        $agentStats = array();
 
         foreach ($agentGrid as $statusKey => $byDept) {
             $statusObj  = TicketStatus::lookup($statusKey);
@@ -1037,17 +1100,21 @@ class QuickButtonsAjax extends AjaxController {
                             'avgDisplay' => self::formatDuration($avgSec),
                             'count'      => $data['count'],
                         );
-                        $distinctDepts[$deptId]   = array('id' => (string) $deptId,  'name' => $deptName);
-                        $distinctTopics[$topicId] = array('id' => (string) $topicId, 'name' => $topicName);
-                        $distinctAgents[$agentId] = array('id' => (string) $agentId, 'name' => $agentName);
                     }
                 }
             }
         }
 
-        $deptList  = array_values($distinctDepts);
-        $topicList = array_values($distinctTopics);
-        $agentList = array_values($distinctAgents);
+        // Build dropdown lists from FULL lookup tables (not just data in period)
+        $deptList = array();
+        foreach ($deptNames as $id => $name)
+            $deptList[] = array('id' => (string) $id, 'name' => $name);
+        $topicList = array();
+        foreach ($topicNames as $id => $name)
+            $topicList[] = array('id' => (string) $id, 'name' => $name);
+        $agentList = array();
+        foreach ($staffNames as $id => $name)
+            $agentList[] = array('id' => (string) $id, 'name' => $name);
         usort($deptList,  function($a, $b) { return strcmp($a['name'], $b['name']); });
         usort($topicList, function($a, $b) { return strcmp($a['name'], $b['name']); });
         usort($agentList, function($a, $b) { return strcmp($a['name'], $b['name']); });
@@ -1060,12 +1127,13 @@ class QuickButtonsAjax extends AjaxController {
         }
         $agentRes = db_query(
             "SELECT e.staff_id, s.firstname, s.lastname, COUNT(*) as cnt
-             FROM ost_thread_event e
-             JOIN ost_thread t ON e.thread_id = t.id AND t.object_type = 'T'
-             JOIN ost_ticket tk ON t.object_id = tk.ticket_id
-             LEFT JOIN ost_staff s ON e.staff_id = s.staff_id
-             WHERE e.event_id = " . self::EVENT_CLAIM . " AND e.timestamp >= '{$since}'
-               AND e.timestamp <= '{$until}'
+             FROM " . THREAD_EVENT_TABLE . " e
+             JOIN " . THREAD_TABLE . " t ON e.thread_id = t.id AND t.object_type = 'T'
+             JOIN " . TICKET_TABLE . " tk ON t.object_id = tk.ticket_id
+             LEFT JOIN " . STAFF_TABLE . " s ON e.staff_id = s.staff_id
+             WHERE e.event_id = " . self::EVENT_CLAIM . " AND e.timestamp >= '" . db_input($since, false) . "'
+               AND e.timestamp <= '" . db_input($until, false) . "'
+               AND e.staff_id > 0
                {$deptFilter} {$agentLimit}
              GROUP BY e.staff_id
              ORDER BY cnt DESC
@@ -1081,8 +1149,8 @@ class QuickButtonsAjax extends AjaxController {
         // 4. Current queue snapshot (reuse existing dept/staff filters)
         $queueRes = db_query(
             "SELECT s.id, s.name, COUNT(*) as cnt
-             FROM ost_ticket tk
-             JOIN ost_ticket_status s ON tk.status_id = s.id
+             FROM " . TICKET_TABLE . " tk
+             JOIN " . TICKET_STATUS_TABLE . " s ON tk.status_id = s.id
              WHERE s.state = 'open'
                {$deptFilter} {$staffFilter}
              GROUP BY s.id
@@ -1114,7 +1182,7 @@ class QuickButtonsAjax extends AjaxController {
                  FROM {$prefix}calculated_fields_log l
                  LEFT JOIN {$prefix}staff s ON l.staff_id = s.staff_id
                  {$cfDeptJoin}
-                 WHERE l.created >= '{$since}' AND l.created <= '{$until}'
+                 WHERE l.created >= '" . db_input($since, false) . "' AND l.created <= '" . db_input($until, false) . "'
                    {$cfAgentFilter} {$cfDeptFilter}
                  GROUP BY l.staff_id
                  ORDER BY total DESC"

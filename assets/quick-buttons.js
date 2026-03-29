@@ -691,45 +691,44 @@
         if (!$tabList.length) return;
         if ($tabList.find('a[href="#qa-workflow"]').length) return; // already added
 
-        // Add our tab
+        var iconStyle = 'display:inline-block;vertical-align:middle;position:static;top:auto;margin-right:4px;';
+
+        // Add two tabs: Workflow + Agent Performance
         $tabList.append(
-            '<li><a href="#qa-workflow"><i class="icon-bar-chart"></i> Workflow</a></li>'
+            '<li><a href="#qa-workflow"><i class="icon-bar-chart" style="' + iconStyle + '"></i>Workflow</a></li>' +
+            '<li><a href="#qa-agent-perf"><i class="icon-user" style="' + iconStyle + '"></i>Agent Performance</a></li>'
         );
 
-        // Create content container as sibling of existing tab_content divs
-        var $container = $('<div id="qa-workflow" class="tab_content" style="display:none;"></div>');
-        $tabList.siblings('.tab_content').last().after($container);
-        // Fallback: if no siblings found, try parent
-        if (!$container.parent().length) {
-            $tabList.parent().append($container);
+        // Create content containers as siblings of existing tab_content divs
+        var containerStyle = 'display:none;padding:0;border:none;border-radius:0;background:none;min-height:0;';
+        var $wfContainer = $('<div id="qa-workflow" class="tab_content" style="' + containerStyle + '"></div>');
+        var $apContainer = $('<div id="qa-agent-perf" class="tab_content" style="' + containerStyle + '"></div>');
+        var $lastTab = $tabList.siblings('.tab_content').last();
+        if ($lastTab.length) {
+            $lastTab.after($wfContainer).after($apContainer);
+        } else {
+            $tabList.parent().append($wfContainer).append($apContainer);
         }
 
-        // Handle tab click
-        $tabList.on('click', 'a[href="#qa-workflow"]', function(e) {
+        // Generic tab click handler for our custom tabs
+        $tabList.on('click', 'a[href="#qa-workflow"], a[href="#qa-agent-perf"]', function(e) {
             e.preventDefault();
-            // Deactivate all tabs
+            var target = $(this).attr('href');
             $tabList.find('li').removeClass('active');
             $(this).parent().addClass('active');
-            // Hide all tab content, show ours
             $tabList.siblings('.tab_content').hide();
-            $container.show();
-            loadWorkflowDashboard($container);
+            $(target).show();
+            if (target === '#qa-workflow') loadIframeTab($wfContainer, 'dashboard-page');
+            if (target === '#qa-agent-perf') loadIframeTab($apContainer, 'agent-perf-page');
         });
     }
 
-    function loadWorkflowDashboard($container) {
+    function loadIframeTab($container, page) {
         if ($container.data('loaded')) return;
-        $container.html(
-            '<div style="text-align:center;padding:40px;color:#888;">' +
-            '<div style="font-size:15px;">Loading Workflow Dashboard...</div>' +
-            '</div>'
-        );
-
-        // Load via iframe for full standalone dashboard experience
-        var url = 'ajax.php/quick-buttons/dashboard-page';
+        var url = 'ajax.php/quick-buttons/' + page;
         $container.html(
             '<iframe src="' + url + '" ' +
-            'style="width:100%;border:none;min-height:800px;border-radius:8px;" ' +
+            'style="width:100%;border:none;min-height:800px;" ' +
             'onload="this.style.height=this.contentWindow.document.body.scrollHeight+40+\'px\'">' +
             '</iframe>'
         );

@@ -304,6 +304,8 @@
     }
 
     function fmtAdminSec(s) {
+        if (!s || s < 0 || isNaN(s)) return '0s';
+        s = Math.round(s);
         if (s < 60)    return s + 's';
         if (s < 3600)  return Math.round(s / 60) + 'm';
         if (s < 86400) return (s / 3600).toFixed(1) + 'h';
@@ -364,13 +366,29 @@
                 return;
             }
 
+            // Group by status, aggregate by agent within each group
             var groupOrder = [], groups = {};
             filtered.forEach(function(r) {
                 if (!groups[r.statusId]) {
-                    groups[r.statusId] = { statusName: r.statusName, rows: [] };
+                    groups[r.statusId] = { statusName: r.statusName, byAgent: {} };
                     groupOrder.push(r.statusId);
                 }
-                groups[r.statusId].rows.push(r);
+                var ba = groups[r.statusId].byAgent;
+                if (!ba[r.agentId]) {
+                    ba[r.agentId] = { agentId: r.agentId, agentName: r.agentName, totalSec: 0, totalCount: 0 };
+                }
+                ba[r.agentId].totalSec   += r.avgSeconds * r.count;
+                ba[r.agentId].totalCount += r.count;
+            });
+            // Build rows from aggregated agents
+            groupOrder.forEach(function(statusId) {
+                var ba = groups[statusId].byAgent;
+                groups[statusId].rows = Object.keys(ba).map(function(aid) {
+                    var a = ba[aid];
+                    var avgSec = a.totalCount > 0 ? Math.round(a.totalSec / a.totalCount) : 0;
+                    return { agentId: a.agentId, agentName: a.agentName,
+                             avgSeconds: avgSec, avgDisplay: fmtAdminSec(avgSec), count: a.totalCount };
+                });
             });
 
             var t = '<div style="overflow-x:auto;"><table class="qa-dash-table qa-ap-table">';
@@ -383,7 +401,7 @@
 
             groupOrder.forEach(function(statusId) {
                 var group  = groups[statusId];
-                var rows   = group.rows.slice().sort(function(a, b) { return a.avgSeconds - b.avgSeconds; });
+                var rows   = group.rows.slice().sort(function(a, b) { return a.avgSeconds - b.avgSeconds || a.agentName.localeCompare(b.agentName); });
                 var maxSec = rows[rows.length - 1].avgSeconds || 1;
                 var sumW = 0, sumC = 0;
                 rows.forEach(function(r) { sumW += r.avgSeconds * r.count; sumC += r.count; });

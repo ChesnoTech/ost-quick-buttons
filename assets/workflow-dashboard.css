@@ -229,6 +229,33 @@ body {
 }
 .wd-ap-select:focus { border-color: #128DBE; }
 
+/* Date range inputs in AP card */
+.wd-ap-date {
+    padding: 5px 10px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    font-size: 12px;
+    color: #555;
+    background: #fff;
+    outline: none;
+    font-family: inherit;
+    transition: border-color 0.15s;
+}
+.wd-ap-date:focus { border-color: #128DBE; }
+.wd-ap-date-sep { color: #999; font-size: 12px; }
+.wd-ap-apply {
+    padding: 5px 14px;
+    border: 1px solid #128DBE;
+    border-radius: 6px;
+    background: #128DBE;
+    color: #fff;
+    font-size: 12px;
+    cursor: pointer;
+    font-family: inherit;
+    transition: background 0.15s;
+}
+.wd-ap-apply:hover { background: #0e7bab; }
+
 /* Horizontal scroll wrapper for wide tables on small screens */
 .wd-ap-scroll { overflow-x: auto; }
 
@@ -328,6 +355,32 @@ body {
    DARK MODE — Agent Performance
    ====================================================== */
 
+/* Custom date picker (Monday-start) */
+.wd-date-pick { cursor: pointer; user-select: none; min-width: 90px; text-align: center; }
+.wd-date-pick:hover { border-color: #128DBE; }
+.wd-picker-overlay { z-index: 9999; }
+.wd-picker {
+    background: #fff; border: 1px solid #ccc; border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.15); padding: 10px; width: 250px;
+    z-index: 10000; font-size: 13px;
+}
+.wd-pk-hdr { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.wd-pk-title { font-weight: 600; font-size: 14px; }
+.wd-pk-nav {
+    background: none; border: 1px solid #ddd; border-radius: 4px; cursor: pointer;
+    width: 28px; height: 28px; font-size: 12px; color: #555; line-height: 1;
+}
+.wd-pk-nav:hover { background: #f0f0f0; }
+.wd-pk-days { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; text-align: center; }
+.wd-pk-dh { font-weight: 600; font-size: 11px; color: #888; padding: 4px 0; }
+.wd-pk-d {
+    padding: 6px 0; border-radius: 4px; cursor: pointer; color: #333;
+}
+.wd-pk-d:hover { background: #e8f4fc; }
+.wd-pk-empty { cursor: default; }
+.wd-pk-today { font-weight: 700; border: 1px solid #128DBE; }
+.wd-pk-sel { background: #128DBE !important; color: #fff !important; font-weight: 700; }
+
 /* Dark mode */
 @media (prefers-color-scheme: dark) {
     body { background: #1a1a1a; color: #ddd; }
@@ -348,6 +401,11 @@ body {
     /* Agent performance dark mode */
     .wd-ap-select { background: #2a2a2a; border-color: #444; color: #ccc; }
     .wd-ap-select:focus { border-color: #128DBE; }
+    .wd-ap-date { background: #2a2a2a; border-color: #444; color: #ccc; }
+    .wd-ap-date:focus { border-color: #128DBE; }
+    .wd-ap-date::-webkit-calendar-picker-indicator { filter: invert(1); }
+    .wd-ap-date-sep { color: #666; }
+    .wd-ap-apply { background: #1a6d8e; border-color: #1a6d8e; }
     .wd-ap-table th { border-color: #333; color: #666; }
     .wd-ap-status-header td { background: #2a2a2a; color: #bbb; border-color: #333; }
     .wd-ap-row td { border-color: #2a2a2a; }
@@ -355,4 +413,13 @@ body {
     .wd-ap-bar-track { background: #333; }
     .wd-ap-bar-lbl { color: #4fc3f7; }
     .wd-ap-team-avg { color: #666; }
+    /* Date picker dark mode */
+    .wd-picker { background: #2a2a2a; border-color: #444; box-shadow: 0 4px 16px rgba(0,0,0,0.4); }
+    .wd-pk-title { color: #ddd; }
+    .wd-pk-nav { border-color: #555; color: #ccc; }
+    .wd-pk-nav:hover { background: #333; }
+    .wd-pk-dh { color: #888; }
+    .wd-pk-d { color: #ccc; }
+    .wd-pk-d:hover { background: #3a3a3a; }
+    .wd-pk-today { border-color: #128DBE; }
 }
