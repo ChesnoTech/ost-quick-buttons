@@ -397,6 +397,7 @@
 
     function renderAgentStats(container, data) {
         var stats = data.agentStats || [];
+        var deptStatusMap = data.deptStatusMap || {};
         if (!stats.length) return;
 
         var card = document.createElement('div');
@@ -460,10 +461,21 @@
             };
         }
 
+        // Check if a row matches a department via deptStatusMap (status-based)
+        // Falls back to deptId match if no mapping exists for the department
+        function matchesDept(r, deptId) {
+            if (!deptId) return true;
+            var mapped = deptStatusMap[deptId];
+            if (mapped && mapped.length) {
+                return mapped.indexOf(r.statusId) !== -1;
+            }
+            return r.deptId === deptId;
+        }
+
         function renderTable(filters) {
             // Filter rows
             var filtered = stats.filter(function(r) {
-                if (filters.dept  && r.deptId  !== filters.dept)  return false;
+                if (!matchesDept(r, filters.dept)) return false;
                 if (filters.agent && r.agentId !== filters.agent) return false;
                 if (filters.topic && r.topicId !== filters.topic) return false;
                 return true;
@@ -573,7 +585,7 @@
             // Find which agents/topics/depts have data given current filters
             function getAvailable(filterKey) {
                 return stats.filter(function(r) {
-                    if (filterKey !== 'dept'  && filters.dept  && r.deptId  !== filters.dept)  return false;
+                    if (filterKey !== 'dept'  && !matchesDept(r, filters.dept)) return false;
                     if (filterKey !== 'agent' && filters.agent && r.agentId !== filters.agent) return false;
                     if (filterKey !== 'topic' && filters.topic && r.topicId !== filters.topic) return false;
                     return true;
@@ -622,13 +634,39 @@
             }
 
             // Update dept dropdown
+            // When deptStatusMap is configured, show mapped departments that have matching data
             if (deptEl) {
                 var availDepts = {};
-                getAvailable('dept').forEach(function(r) { availDepts[r.deptId] = r.deptName; });
+                var availRows = getAvailable('dept');
+                var hasMappings = Object.keys(deptStatusMap).length > 0;
+
+                if (hasMappings) {
+                    // Show departments from deptStatusMap that have matching status data
+                    var allStatusIds = {};
+                    availRows.forEach(function(r) { allStatusIds[r.statusId] = true; });
+                    // Also collect deptId-based departments for unmapped fallback
+                    availRows.forEach(function(r) { availDepts[r.deptId] = r.deptName; });
+                    // Add mapped departments that have matching statuses in data
+                    Object.keys(deptStatusMap).forEach(function(deptId) {
+                        var mapped = deptStatusMap[deptId];
+                        var hasData = mapped.some(function(sid) { return allStatusIds[sid]; });
+                        if (hasData) {
+                            // Find dept name from data or from original dropdown
+                            if (!availDepts[deptId]) {
+                                // Look in data.departments for name
+                                var found = (data.departments || []).filter(function(d) { return d.id === deptId; });
+                                if (found.length) availDepts[deptId] = found[0].name;
+                            }
+                        }
+                    });
+                } else {
+                    availRows.forEach(function(r) { availDepts[r.deptId] = r.deptName; });
+                }
+
                 var curDept = deptEl.value;
                 while (deptEl.options.length > 1) deptEl.remove(1);
                 var sortedDepts = Object.keys(availDepts).sort(function(a, b) {
-                    return availDepts[a].localeCompare(availDepts[b]);
+                    return (availDepts[a] || '').localeCompare(availDepts[b] || '');
                 });
                 sortedDepts.forEach(function(id) {
                     var opt = document.createElement('option');

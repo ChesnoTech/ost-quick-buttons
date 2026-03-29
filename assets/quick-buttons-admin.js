@@ -314,7 +314,15 @@
 
     function renderAgentPerfCard($container, data, i18n) {
         var stats = data.agentStats || [];
+        var deptStatusMap = data.deptStatusMap || {};
         if (!stats.length) return;
+
+        function matchesDept(r, deptId) {
+            if (!deptId) return true;
+            var mapped = deptStatusMap[deptId];
+            if (mapped && mapped.length) return mapped.indexOf(r.statusId) !== -1;
+            return r.deptId === deptId;
+        }
 
         var medals = ['\uD83E\uDD47', '\uD83E\uDD48', '\uD83E\uDD49'];
 
@@ -354,7 +362,7 @@
 
         function renderTable(filters) {
             var filtered = stats.filter(function(r) {
-                if (filters.dept  && r.deptId  !== filters.dept)  return false;
+                if (!matchesDept(r, filters.dept)) return false;
                 if (filters.agent && r.agentId !== filters.agent) return false;
                 if (filters.topic && r.topicId !== filters.topic) return false;
                 return true;
@@ -446,12 +454,186 @@
     }
 
     // ================================================================
+    //  Department → Status Mapping Tab
+    // ================================================================
+
+    function initDeptStatusMap() {
+        var isPluginPage   = $('a[href="#instances"]').length > 0;
+        var isInstancePage = $('input[type="text"], textarea').filter(function() {
+            var $f = $(this).closest('.form-field');
+            return $f.length && $f.text().indexOf('Widget Configuration') > -1;
+        }).length > 0;
+
+        if (!isPluginPage || isInstancePage) return;
+        if ($('.qa-dsm-container').length) return;
+
+        var $tabList = $('#plugin-tabs');
+        if (!$tabList.length) $tabList = $('ul.tabs, .tab_nav ul').first();
+        if (!$tabList.length) return;
+
+        $tabList.append('<li><a href="#dept-statuses">Dept Statuses</a></li>');
+
+        var $container = $(
+            '<div id="dept-statuses" class="tab_content qa-dsm-container" ' +
+            'style="display:none;padding:15px;"></div>'
+        );
+
+        var $tabContainer = $('#plugin-tabs_container');
+        if ($tabContainer.length) {
+            $tabContainer.append($container);
+        } else {
+            $tabList.after($container);
+        }
+
+        $tabList.on('click', 'a[href="#dept-statuses"]', function(e) {
+            e.preventDefault();
+            $tabList.find('li').removeClass('active');
+            $(this).parent().addClass('active');
+            $container.siblings('.tab_content').hide();
+            $container.show();
+            loadDeptStatusMap($container);
+        });
+    }
+
+    function loadDeptStatusMap($container) {
+        if ($container.data('loaded')) return;
+        $container.html('<p style="color:#888;">Loading...</p>');
+
+        $.ajax({
+            url: 'ajax.php/quick-buttons/dept-status-map',
+            type: 'GET',
+            dataType: 'json',
+            cache: false,
+            success: function(data) {
+                if (data.error) {
+                    $container.html('<p style="color:red;">' + escapeHtml(data.error) + '</p>');
+                    return;
+                }
+                renderDeptStatusMap($container, data);
+                $container.data('loaded', true);
+            },
+            error: function() {
+                $container.html('<p style="color:red;">Failed to load mapping data.</p>');
+            }
+        });
+    }
+
+    function renderDeptStatusMap($container, data) {
+        var map = data.map || {};
+        var depts = data.departments || [];
+        var statuses = data.statuses || [];
+
+        var html = '<div class="qa-dsm-page">';
+        html += '<p class="qa-dsm-desc">Map ticket statuses to departments. ' +
+                'When a department is selected in Agent Performance reports, ' +
+                'only agents who completed the mapped statuses will appear.</p>';
+
+        depts.forEach(function(dept) {
+            var deptStatuses = map[dept.id] || [];
+            var hasMapping = deptStatuses.length > 0;
+            html += '<div class="qa-dsm-dept" data-dept-id="' + escapeHtml(dept.id) + '">';
+            html += '<div class="qa-dsm-dept-header' + (hasMapping ? ' qa-dsm-has-mapping' : '') + '">';
+            html += '<span class="qa-dsm-arrow">&#9654;</span> ';
+            html += '<strong>' + escapeHtml(dept.name) + '</strong>';
+            if (hasMapping) {
+                html += ' <span class="qa-dsm-badge">' + deptStatuses.length + ' statuses</span>';
+            }
+            html += '</div>';
+            html += '<div class="qa-dsm-dept-body" style="display:none;">';
+            html += '<div class="qa-dsm-checks">';
+            statuses.forEach(function(s) {
+                var checked = deptStatuses.indexOf(s.id) !== -1 ? ' checked' : '';
+                html += '<label class="qa-dsm-check-label">';
+                html += '<input type="checkbox" value="' + escapeHtml(s.id) + '"' + checked + '> ';
+                html += escapeHtml(s.name);
+                html += '</label>';
+            });
+            html += '</div></div></div>';
+        });
+
+        html += '<div class="qa-dsm-actions">';
+        html += '<button class="qa-dsm-save action-button" style="background:#128DBE;color:#fff;padding:8px 24px;border:none;border-radius:4px;cursor:pointer;font-size:14px;">Save Mapping</button>';
+        html += '<span class="qa-dsm-status" style="margin-left:12px;"></span>';
+        html += '</div>';
+        html += '</div>';
+
+        $container.html(html);
+
+        // Accordion toggle
+        $container.on('click', '.qa-dsm-dept-header', function() {
+            var $body = $(this).next('.qa-dsm-dept-body');
+            var $arrow = $(this).find('.qa-dsm-arrow');
+            if ($body.is(':visible')) {
+                $body.slideUp(150);
+                $arrow.html('&#9654;');
+            } else {
+                $body.slideDown(150);
+                $arrow.html('&#9660;');
+            }
+        });
+
+        // Update badge on checkbox change
+        $container.on('change', '.qa-dsm-checks input', function() {
+            var $dept = $(this).closest('.qa-dsm-dept');
+            var count = $dept.find('.qa-dsm-checks input:checked').length;
+            var $header = $dept.find('.qa-dsm-dept-header');
+            $header.find('.qa-dsm-badge').remove();
+            if (count > 0) {
+                $header.append(' <span class="qa-dsm-badge">' + count + ' statuses</span>');
+                $header.addClass('qa-dsm-has-mapping');
+            } else {
+                $header.removeClass('qa-dsm-has-mapping');
+            }
+        });
+
+        // Save
+        $container.on('click', '.qa-dsm-save', function() {
+            var $btn = $(this);
+            var $status = $container.find('.qa-dsm-status');
+            var result = {};
+
+            $container.find('.qa-dsm-dept').each(function() {
+                var deptId = $(this).data('dept-id').toString();
+                var checked = [];
+                $(this).find('.qa-dsm-checks input:checked').each(function() {
+                    checked.push($(this).val());
+                });
+                if (checked.length > 0) {
+                    result[deptId] = checked;
+                }
+            });
+
+            $btn.prop('disabled', true).text('Saving...');
+            $.ajax({
+                url: 'ajax.php/quick-buttons/dept-status-map-save',
+                type: 'POST',
+                data: { dept_status_map: JSON.stringify(result) },
+                dataType: 'json',
+                success: function(resp) {
+                    if (resp.success) {
+                        $status.html('<span style="color:#27ae60;">&#10003; Saved</span>');
+                    } else {
+                        $status.html('<span style="color:#e74c3c;">' + escapeHtml(resp.error || 'Error') + '</span>');
+                    }
+                    $btn.prop('disabled', false).text('Save Mapping');
+                    setTimeout(function() { $status.html(''); }, 3000);
+                },
+                error: function() {
+                    $status.html('<span style="color:#e74c3c;">Request failed</span>');
+                    $btn.prop('disabled', false).text('Save Mapping');
+                }
+            });
+        });
+    }
+
+    // ================================================================
     //  Bootstrap
     // ================================================================
 
     $(function() {
         initWidgetConfig();
         initDashboard();
+        initDeptStatusMap();
     });
 
     $(document).on('pjax:end', function() {

@@ -53,7 +53,9 @@ class QuickButtonsPlugin extends Plugin {
                 url_get('^assets/js$', 'serveJs'),
                 url_get('^assets/css$', 'serveCss'),
                 url_get('^assets/admin-js$', 'serveAdminJs'),
-                url_get('^assets/admin-css$', 'serveAdminCss')
+                url_get('^assets/admin-css$', 'serveAdminCss'),
+                url_get('^dept-status-map$', 'getDeptStatusMap'),
+                url_post('^dept-status-map-save$', 'saveDeptStatusMap')
             ))
         );
     }

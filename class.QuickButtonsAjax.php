@@ -1204,6 +1204,9 @@ class QuickButtonsAjax extends AjaxController {
         $totalQueue = array_sum(array_column($queue, 'count'));
         $activeAgents = count($agents);
 
+        // Load dept→status mapping for report filtering
+        $deptStatusMap = self::loadDeptStatusMap();
+
         return $this->json_encode(array(
             'days'     => $days,
             'from'     => $from,
@@ -1219,14 +1222,13 @@ class QuickButtonsAjax extends AjaxController {
             'queue'       => $queue,
             'cfValues'    => $cfValues,
             'isLimited'   => $isLimited,
+            'deptStatusMap' => $deptStatusMap,
             'kpi'      => array(
                 'totalProcessed' => $totalProcessed,
                 'avgPerDay'      => $avgPerDay,
                 'totalQueue'     => $totalQueue,
                 'activeAgents'   => $activeAgents,
             ),
-            // i18n is already embedded in the page HTML via WD_DATA.i18n
-            // No need to send it on every data refresh
         ));
     }
 
@@ -1430,5 +1432,94 @@ class QuickButtonsAjax extends AjaxController {
     function serveAdminCss() {
         $this->serveFile(dirname(__FILE__) . '/assets/quick-buttons-admin.css',
             'text/css; charset=UTF-8', 3600);
+    }
+
+    // ================================================================
+    //  Department → Status Mapping (for Agent Performance filtering)
+    // ================================================================
+
+    private static function loadDeptStatusMap() {
+        $plugin = self::findPlugin();
+        if (!$plugin) return (object) array();
+        $ns = 'plugin.' . $plugin->getId();
+        $row = db_fetch_array(db_query(sprintf(
+            "SELECT value FROM %s WHERE namespace=%s AND `key`='dept_status_map'",
+            CONFIG_TABLE, db_input($ns)
+        )));
+        if ($row && $row['value']) {
+            $map = @json_decode($row['value'], true);
+            if (is_array($map)) return $map;
+        }
+        return (object) array();
+    }
+
+    function getDeptStatusMap() {
+        $this->requireStaff();
+        global $thisstaff;
+        if (!$thisstaff->isAdmin())
+            return $this->json_encode(array('error' => __('Admin access required')));
+
+        $map = self::loadDeptStatusMap();
+
+        // All departments
+        $depts = array();
+        $dRes = db_query("SELECT id, name FROM " . DEPT_TABLE . " ORDER BY name");
+        if ($dRes) while ($r = db_fetch_array($dRes))
+            $depts[] = array('id' => (string) $r['id'], 'name' => $r['name']);
+
+        // All open statuses
+        $statuses = array();
+        $sRes = db_query("SELECT id, name FROM " . TICKET_STATUS_TABLE . " WHERE state='open' ORDER BY sort, name");
+        if ($sRes) while ($r = db_fetch_array($sRes))
+            $statuses[] = array('id' => (string) $r['id'], 'name' => $r['name']);
+
+        return $this->json_encode(array(
+            'map'          => $map,
+            'departments'  => $depts,
+            'statuses'     => $statuses,
+        ));
+    }
+
+    function saveDeptStatusMap() {
+        $this->requireStaff();
+        global $thisstaff;
+        if (!$thisstaff->isAdmin())
+            return $this->json_encode(array('error' => __('Admin access required')));
+
+        $json = $_POST['dept_status_map'] ?? '';
+        $data = @json_decode($json, true);
+        if (!is_array($data))
+            return $this->json_encode(array('error' => __('Invalid JSON')));
+
+        // Validate: keys must be integers, values must be arrays of integers
+        $clean = array();
+        foreach ($data as $deptId => $statusIds) {
+            $deptId = (int) $deptId;
+            if ($deptId <= 0) continue;
+            if (!is_array($statusIds)) continue;
+            $ids = array_values(array_unique(array_filter(
+                array_map('intval', $statusIds),
+                function($v) { return $v > 0; }
+            )));
+            if (!empty($ids))
+                $clean[(string) $deptId] = array_map('strval', $ids);
+        }
+
+        $plugin = self::findPlugin();
+        if (!$plugin)
+            return $this->json_encode(array('error' => __('Plugin not found')));
+
+        $ns = 'plugin.' . $plugin->getId();
+        $jsonClean = json_encode($clean, JSON_UNESCAPED_UNICODE);
+        $result = db_query(sprintf(
+            "INSERT INTO %s (namespace, `key`, value, updated)
+             VALUES (%s, 'dept_status_map', %s, NOW())
+             ON DUPLICATE KEY UPDATE value=VALUES(value), updated=NOW()",
+            CONFIG_TABLE, db_input($ns), db_input($jsonClean)
+        ));
+        if (!$result)
+            return $this->json_encode(array('error' => 'DB error: ' . db_error()));
+
+        return $this->json_encode(array('success' => true, 'message' => __('Mapping saved')));
     }
 }
