@@ -564,28 +564,101 @@
             body.innerHTML = html;
         }
 
-        // Restore saved filter selections and render
-        var initFilters = { dept: '', agent: '', topic: '' };
-        ['dept', 'agent', 'topic'].forEach(function(key) {
-            var elId = 'wd-ap-' + key;
-            var el = document.getElementById(elId);
-            if (el && savedApFilters[key]) {
-                // Only restore if the option still exists in the dropdown
-                var opts = Array.prototype.slice.call(el.options);
-                var hasOpt = opts.some(function(o) { return o.value === savedApFilters[key]; });
-                if (hasOpt) {
-                    el.value = savedApFilters[key];
-                    initFilters[key] = savedApFilters[key];
-                }
+        // Contextual dropdown filtering — when dept is selected, only show agents/topics with data in that dept
+        function updateDropdownOptions(filters) {
+            var deptEl  = document.getElementById('wd-ap-dept');
+            var agentEl = document.getElementById('wd-ap-agent');
+            var topicEl = document.getElementById('wd-ap-topic');
+
+            // Find which agents/topics/depts have data given current filters
+            function getAvailable(filterKey) {
+                return stats.filter(function(r) {
+                    if (filterKey !== 'dept'  && filters.dept  && r.deptId  !== filters.dept)  return false;
+                    if (filterKey !== 'agent' && filters.agent && r.agentId !== filters.agent) return false;
+                    if (filterKey !== 'topic' && filters.topic && r.topicId !== filters.topic) return false;
+                    return true;
+                });
             }
+
+            // Update agent dropdown
+            if (agentEl) {
+                var availAgents = {};
+                getAvailable('agent').forEach(function(r) { availAgents[r.agentId] = r.agentName; });
+                var curAgent = agentEl.value;
+                // Remove all options except "All"
+                while (agentEl.options.length > 1) agentEl.remove(1);
+                // Re-add only agents with data
+                var sortedAgents = Object.keys(availAgents).sort(function(a, b) {
+                    return availAgents[a].localeCompare(availAgents[b]);
+                });
+                sortedAgents.forEach(function(id) {
+                    var opt = document.createElement('option');
+                    opt.value = id;
+                    opt.textContent = availAgents[id];
+                    agentEl.appendChild(opt);
+                });
+                // Restore selection if still valid
+                agentEl.value = availAgents[curAgent] ? curAgent : '';
+                if (agentEl.value !== curAgent) filters.agent = '';
+            }
+
+            // Update topic dropdown
+            if (topicEl) {
+                var availTopics = {};
+                getAvailable('topic').forEach(function(r) { availTopics[r.topicId] = r.topicName; });
+                var curTopic = topicEl.value;
+                while (topicEl.options.length > 1) topicEl.remove(1);
+                var sortedTopics = Object.keys(availTopics).sort(function(a, b) {
+                    return availTopics[a].localeCompare(availTopics[b]);
+                });
+                sortedTopics.forEach(function(id) {
+                    var opt = document.createElement('option');
+                    opt.value = id;
+                    opt.textContent = availTopics[id];
+                    topicEl.appendChild(opt);
+                });
+                topicEl.value = availTopics[curTopic] ? curTopic : '';
+                if (topicEl.value !== curTopic) filters.topic = '';
+            }
+
+            // Update dept dropdown
+            if (deptEl) {
+                var availDepts = {};
+                getAvailable('dept').forEach(function(r) { availDepts[r.deptId] = r.deptName; });
+                var curDept = deptEl.value;
+                while (deptEl.options.length > 1) deptEl.remove(1);
+                var sortedDepts = Object.keys(availDepts).sort(function(a, b) {
+                    return availDepts[a].localeCompare(availDepts[b]);
+                });
+                sortedDepts.forEach(function(id) {
+                    var opt = document.createElement('option');
+                    opt.value = id;
+                    opt.textContent = availDepts[id];
+                    deptEl.appendChild(opt);
+                });
+                deptEl.value = availDepts[curDept] ? curDept : '';
+                if (deptEl.value !== curDept) filters.dept = '';
+            }
+        }
+
+        // Restore saved filter selections and render
+        var initFilters = { dept: savedApFilters.dept, agent: savedApFilters.agent, topic: savedApFilters.topic };
+        updateDropdownOptions(initFilters);
+        // Restore selections after dropdown rebuild
+        ['dept', 'agent', 'topic'].forEach(function(key) {
+            var el = document.getElementById('wd-ap-' + key);
+            if (el && initFilters[key]) el.value = initFilters[key];
         });
         renderTable(initFilters);
 
-        // Wire filter changes — save selections for re-render persistence
+        // Wire filter changes
         ['wd-ap-dept', 'wd-ap-agent', 'wd-ap-topic'].forEach(function(id) {
             var el = document.getElementById(id);
             if (el) el.addEventListener('change', function() {
                 var f = getFilters();
+                updateDropdownOptions(f);
+                // Re-read filters after dropdown update may have cleared invalid selections
+                f = getFilters();
                 savedApFilters.dept  = f.dept;
                 savedApFilters.agent = f.agent;
                 savedApFilters.topic = f.topic;
