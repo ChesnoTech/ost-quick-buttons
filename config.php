@@ -117,7 +117,11 @@ class QuickButtonsConfig extends PluginConfig {
             $variant = $deptCfg['variant'] ?? 'single';
 
             // Required for all variants: trigger and target statuses
-            foreach (array('start_trigger_status', 'start_target_status', 'stop_target_status') as $field) {
+            // stop_target_status is only used in single-step (two-step uses step2_stop_target_status)
+            $requiredFields = array('start_trigger_status', 'start_target_status');
+            if ($variant !== 'twostep')
+                $requiredFields[] = 'stop_target_status';
+            foreach ($requiredFields as $field) {
                 if (empty($deptCfg[$field])) {
                     $errors['err'] = sprintf(
                         __('Department %s: %s is required'),
