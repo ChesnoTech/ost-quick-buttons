@@ -401,13 +401,14 @@
         // Step 1 validation (both variants)
         if (!trigger) warnings.push(t('triggerRequired'));
         if (!working) warnings.push(t('workingRequired'));
-        if (!done) warnings.push(t('doneRequired'));
+        // Done (stop_target_status) only applies to single-step
+        if (variant !== 'twostep' && !done) warnings.push(t('doneRequired'));
 
         if (trigger && trigger === working)
             warnings.push(t('triggerEqualsWorking'));
-        if (done && done === trigger)
+        if (variant !== 'twostep' && done && done === trigger)
             warnings.push(t('doneEqualsTrigger'));
-        if (working && working === done)
+        if (variant !== 'twostep' && working && working === done)
             warnings.push(t('workingEqualsDone'));
 
         // Step 2 validation (twostep only)
