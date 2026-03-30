@@ -11,7 +11,6 @@ require_once INCLUDE_DIR . 'class.ajax.php';
 require_once INCLUDE_DIR . 'class.ticket.php';
 require_once INCLUDE_DIR . 'class.forms.php';
 require_once INCLUDE_DIR . 'class.dept.php';
-require_once INCLUDE_DIR . 'class.topic.php';
 require_once INCLUDE_DIR . 'class.list.php';
 require_once INCLUDE_DIR . 'class.plugin.php';
 
@@ -1066,6 +1065,7 @@ class QuickButtonsAjax extends AjaxController {
         if ($snRes) while ($r = db_fetch_array($snRes))
             $staffNames[(int)$r['staff_id']] = trim($r['firstname'] . ' ' . $r['lastname']) ?: __('Unknown');
 
+        require_once INCLUDE_DIR . 'class.topic.php';
         $topicNames = array();
         $tnRes = db_query("SELECT topic_id FROM " . TOPIC_TABLE);
         if ($tnRes) while ($r = db_fetch_array($tnRes)) {
