@@ -23,7 +23,8 @@
                 partialReady: 'Next', startStep2: 'Start Step 2',
                 undo: 'Undo', bulkStart: 'Start Selected', bulkStop: 'Complete Selected',
                 elapsed: 'elapsed', waiting: 'waiting',
-                labelH: 'H', labelM: 'M', labelS: 'S' },
+                labelH: 'H', labelM: 'M', labelS: 'S',
+                deadline: 'deadline', overdue: 'overdue' },
         perms: { canAssign: true, canTransfer: true, canRelease: true, canManage: true },
         executing: {},
         timerInterval: null,
@@ -39,7 +40,7 @@
             start: 'icon-play',
             partial: 'icon-arrow-right',
             start2: 'icon-play',
-            stop: 'icon-check+icon-share'
+            stop: 'emoji:\u2714'
         },
         COLORS: {
             start: '#128DBE',
@@ -51,7 +52,7 @@
         // Legacy aliases (backward compat)
         START_ICON: 'icon-play',
         START_COLOR: '#128DBE',
-        STOP_ICON: 'icon-check+icon-share',
+        STOP_ICON: 'emoji:\u2714',
         STOP_COLOR: '#27ae60',
 
         init: function() {
@@ -64,6 +65,7 @@
             $('tr.has-qa-inline').removeClass('has-qa-inline');
             $('.qa-bulk-toolbar').remove();
             if (QA.timerInterval) { clearInterval(QA.timerInterval); QA.timerInterval = null; }
+            QA.deadlineBadges = [];
 
             var tids = [];
             $('form#tickets tbody tr input.ckb').each(function() {
@@ -87,6 +89,11 @@
                     QA.fetchMs = Date.now();
                     if (data.i18n) QA.i18n = $.extend(QA.i18n, data.i18n);
                     if (data.perms) QA.perms = data.perms;
+                    // Build lookup of topics that have deadline countdown enabled
+                    QA.deadlineTopics = {};
+                    $.each(QA.widgets, function(_, w) {
+                        if (w.showDeadline) QA.deadlineTopics[String(w.topic)] = true;
+                    });
                     if (QA.widgets.length) {
                         QA.renderButtons();
                         QA.renderBulkToolbar();
@@ -214,20 +221,36 @@
                     $link.attr('data-timer', '1');
                 }
 
+                // Deadline countdown badge (below button on desktop and mobile)
+                if (info && QA.deadlineTopics[String(info.topic)] && info.deadline_secs != null) {
+                    var deadlineTargetMs = QA.fetchMs + (info.deadline_secs * 1000);
+                    var dlClass = info.deadline_secs <= 0
+                        ? 'qa-deadline-badge qa-deadline-overdue'
+                        : 'qa-deadline-badge';
+                    var $deadline = $('<span class="' + dlClass + '" data-deadline-ms="' + deadlineTargetMs + '">'
+                        + '<span class="qa-dl-icon">\u23F3</span>'
+                        + '<span class="qa-dl-text"></span>'
+                        + '</span>');
+                    $link.data('deadline-el', $deadline);
+                }
+
                 if (isMobile) {
                     var $actions = $('<div class="qa-row-actions"></div>');
                     var $timerElM = $link.data('timer-el');
-                    if ($timerElM) $link.prepend($timerElM); // timer inside button
+                    if ($timerElM) $link.prepend($timerElM); // elapsed timer left side
                     $actions.append($link);
+                    // Deadline badge below button (not inside it — 44px can't fit two strips + icon)
+                    var $dlElM = $link.data('deadline-el');
+                    if ($dlElM) $actions.append($dlElM);
                     $row.addClass('has-qa-inline').prepend($actions);
                 } else {
-                    var $td = $('<td class="qa-actions-cell"></td>');
-                    var $actions = $('<div class="qa-row-actions"></div>');
-                    // Add timer badge above button if present
+                    // Desktop: everything INSIDE the button — fills the row height
                     var $timerEl = $link.data('timer-el');
-                    if ($timerEl) $actions.append($timerEl);
-                    $actions.append($link);
-                    $td.append($actions);
+                    if ($timerEl) $link.prepend($timerEl);  // elapsed at top
+                    var $dlEl = $link.data('deadline-el');
+                    if ($dlEl) $link.append($dlEl);         // deadline at bottom
+                    var $td = $('<td class="qa-actions-cell"></td>');
+                    $td.append($link);
                     $row.addClass('has-qa-inline').append($td);
                 }
             });
@@ -263,18 +286,39 @@
                         : $el.siblings('.qa-inline-btn')
                 });
             });
-            if (QA.timerBadges.length) {
+            // Cache deadline countdown badges
+            QA.deadlineBadges = [];
+            $('.qa-deadline-badge').each(function() {
+                var $el = $(this);
+                var deadlineMs = parseInt($el.data('deadline-ms'), 10);
+                if (!deadlineMs) return;
+                QA.deadlineBadges.push({ $el: $el, deadlineMs: deadlineMs });
+            });
+            if (QA.timerBadges.length || QA.deadlineBadges.length) {
                 QA.updateTimers();
                 QA.timerInterval = setInterval(QA.updateTimers, 1000);
             }
         },
 
         renderTimerHtml: function(h, m, s) {
+            var lD = QA.i18n.labelD || 'D';
             var lH = QA.i18n.labelH || 'H';
             var lM = QA.i18n.labelM || 'M';
             var lS = QA.i18n.labelS || 'S';
+            var d = Math.floor(h / 24);
+            var rh = h % 24;
             var parts = [];
-            if (h > 0) {
+            // Stopwatch icon at top of vertical stack
+            parts.push('<span class="qa-ti">\u23F1</span>');
+            if (d > 0) {
+                parts.push(
+                    '<span class="qa-tl">' + lD + '</span>' +
+                    '<span class="qa-tv">' + d + '</span>' +
+                    '<span class="qa-ts"></span>' +
+                    '<span class="qa-tl">' + lH + '</span>' +
+                    '<span class="qa-tv">' + rh + '</span>'
+                );
+            } else if (h > 0) {
                 parts.push(
                     '<span class="qa-tl">' + lH + '</span>' +
                     '<span class="qa-tv">' + h + '</span>' +
@@ -311,11 +355,20 @@
                 if (isMobile) {
                     badge.$el.html(QA.renderTimerHtml(h, m, s));
                 } else {
-                    badge.$el.text(QA.formatDuration(diffSec));
+                    badge.$el.html('<span class="qa-ti">\u23F1</span><span class="qa-tt">' + QA.formatDuration(diffSec) + '</span>');
                 }
                 var formatted = QA.formatDuration(diffSec);
                 var suffix = badge.isWaiting ? (QA.i18n.waiting || 'waiting') : (QA.i18n.elapsed || 'elapsed');
                 badge.$btn.attr('title', formatted + ' ' + suffix);
+            }
+            // Deadline countdown badges
+            for (var j = 0; j < QA.deadlineBadges.length; j++) {
+                var dl = QA.deadlineBadges[j];
+                var remainSec = Math.floor((dl.deadlineMs - nowMs) / 1000);
+                var isOverdue = remainSec < 0;
+                var absSec = Math.abs(remainSec);
+                dl.$el.toggleClass('qa-deadline-overdue', isOverdue);
+                dl.$el.find('.qa-dl-text').text((isOverdue ? '-' : '') + QA.formatDuration(absSec));
             }
         },
 
@@ -327,9 +380,12 @@
         },
 
         formatDuration: function(totalSec) {
-            var h = Math.floor(totalSec / 3600);
+            var d = Math.floor(totalSec / 86400);
+            var h = Math.floor((totalSec % 86400) / 3600);
             var m = Math.floor((totalSec % 3600) / 60);
             var s = totalSec % 60;
+            if (d > 0)
+                return d + 'd ' + h + 'h';
             if (h > 0)
                 return h + 'h ' + (m < 10 ? '0' : '') + m + 'm';
             if (m > 0)
@@ -543,6 +599,11 @@
 
         renderIcon: function(iconClass) {
             if (!iconClass) return '';
+            // Unicode icon shorthand: "emoji:✔" renders as a styled span
+            if (iconClass.indexOf('emoji:') === 0) {
+                var ch = iconClass.substring(6);
+                return '<span class="qa-emoji-icon">' + QA.escapeHtml(ch) + '</span>';
+            }
             if (iconClass.indexOf('+') > -1) {
                 var parts = iconClass.split('+');
                 return '<span class="icon-stack qa-icon-stack">' +

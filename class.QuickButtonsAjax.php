@@ -399,6 +399,7 @@ class QuickButtonsAjax extends AjaxController {
                 'confirm'          => $confirmMode !== 'none',
                 'confirmMode'      => $confirmMode,
                 'countdownSeconds' => $countdownSec,
+                'showDeadline'     => !empty($config->get('show_deadline')),
             );
         }
 
@@ -428,7 +429,9 @@ class QuickButtonsAjax extends AjaxController {
                                     t.lastupdate
                                 ),
                                 NOW()
-                            ) AS elapsed_secs
+                            ) AS elapsed_secs,
+                            TIMESTAMPDIFF(SECOND, NOW(), COALESCE(t.duedate, t.est_duedate)) AS deadline_secs,
+                            t.isoverdue
                      FROM " . TICKET_TABLE . " t WHERE t.ticket_id IN ($in)");
                 if ($res) {
                     $map = array();
@@ -439,7 +442,9 @@ class QuickButtonsAjax extends AjaxController {
                             'dept'       => $row['dept_id'] ? (string) $row['dept_id'] : null,
                             'status'     => $row['status_id'] ? (string) $row['status_id'] : null,
                             'staff'      => $row['staff_id'] ? (string) $row['staff_id'] : null,
-                            'since_secs' => isset($row['elapsed_secs']) ? (int) $row['elapsed_secs'] : null,
+                            'since_secs'    => isset($row['elapsed_secs']) ? (int) $row['elapsed_secs'] : null,
+                            'deadline_secs' => isset($row['deadline_secs']) ? (int) $row['deadline_secs'] : null,
+                            'isoverdue'     => !empty($row['isoverdue']),
                         );
                     }
                     $tickets = (object) $map;
@@ -483,6 +488,8 @@ class QuickButtonsAjax extends AjaxController {
             'labelH'       => __('H'),
             'labelM'       => __('M'),
             'labelS'       => __('S'),
+            'deadline'     => __('deadline'),
+            'overdue'      => __('overdue'),
         );
     }
 

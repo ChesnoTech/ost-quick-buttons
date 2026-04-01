@@ -61,6 +61,11 @@ class QuickButtonsConfig extends PluginConfig {
                 'hint' => __('Seconds before auto-execute in Countdown mode (3–10). Only used when mode is "Countdown".'),
                 'configuration' => array('size' => 5, 'length' => 2),
             )),
+            'show_deadline' => new BooleanField(array(
+                'label' => __('Show Deadline Countdown'),
+                'default' => 0,
+                'hint' => __('Display a countdown to the ticket deadline (SLA or manual due date) below each button.'),
+            )),
             'widget_config' => new TextboxField(array(
                 'label' => __('Widget Configuration'),
                 'required' => false,

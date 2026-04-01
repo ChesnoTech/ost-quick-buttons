@@ -15,11 +15,12 @@ td.qa-actions-cell {
     position: sticky;
     right: 0;
     z-index: 15;
-    padding: 0 6px !important;
+    padding: 3px 5px !important;
     background: inherit;
     border-left: none !important;
     white-space: nowrap;
-    vertical-align: middle;
+    vertical-align: stretch;
+    height: 100%;
 }
 
 /* Match header column */
@@ -32,23 +33,18 @@ th.qa-actions-header {
     background: inherit;
 }
 
-/* Actions container inside the sticky cell */
-.qa-row-actions {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 1px;
-}
-
-/* Each inline button — min-height allows timer text below icon */
+/* Each inline button — fills the cell, vertical stack */
 .qa-inline-btn {
-    width: 28px;
-    min-height: 28px;
-    border-radius: 5px;
+    width: 90px;
+    min-height: 52px;
+    height: 100%;
+    border-radius: 6px;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
+    gap: 3px;
+    padding: 4px 4px;
     color: #fff !important;
     font-size: 13px;
     text-decoration: none !important;
@@ -58,6 +54,7 @@ th.qa-actions-header {
     box-shadow: 0 1px 3px rgba(0,0,0,0.15);
     flex-shrink: 0;
     overflow: hidden;
+    box-sizing: border-box;
 }
 
 /* Label text overflow protection */
@@ -91,12 +88,15 @@ th.qa-actions-header {
 /* Stacked icon in inline buttons — use fixed 20px sizing to match
    svg.css which renders icon ::before as 20x20 SVG backgrounds. */
 .qa-inline-btn .qa-icon-stack {
-    display: inline-block !important;
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
     position: relative;
     width: 20px !important;
     height: 20px !important;
     line-height: 20px;
     flex-shrink: 0;
+    flex: 1;
 }
 
 .qa-inline-btn .qa-icon-stack .icon-stack-base {
@@ -129,6 +129,14 @@ th.qa-actions-header {
     text-align: center;
     vertical-align: middle;
     filter: brightness(0) invert(1) !important;
+    flex: 0 0 auto;
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    width: 20px !important;
+    height: 16px !important;
+    min-width: 20px;
+    min-height: 16px;
 }
 
 .qa-inline-btn > i::before {
@@ -137,6 +145,8 @@ th.qa-actions-header {
     line-height: 20px !important;
     text-align: center;
     filter: brightness(0) invert(1) !important;
+    width: 20px !important;
+    height: 20px !important;
 }
 
 /* Stacked icon inner elements — override svg.css sizing.
@@ -159,6 +169,23 @@ th.qa-actions-header {
     filter: brightness(0) invert(1) !important;
 }
 
+/* Emoji icon — Unicode character rendered directly, no SVG dependency */
+.qa-inline-btn .qa-emoji-icon {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    line-height: 1;
+    color: #fff;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.2);
+    -webkit-text-stroke: 0;
+    font-weight: 900;
+    width: 22px;
+    height: 16px;
+    transform: rotate(15deg);
+}
+
 /* Spinner animation */
 @-webkit-keyframes qa-spin {
     0%   { -webkit-transform: rotate(0deg); }
@@ -179,29 +206,78 @@ th.qa-actions-header {
    LIVE TIMER BADGE
    ====================================================== */
 
-/* Timer badge — sits above the button in the actions cell */
+/* Timer badge — inside the button (desktop) or left strip (mobile) */
 .qa-timer-badge {
-    display: block;
-    font-size: 9px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    font-size: 10px;
     line-height: 1;
-    padding: 2px 0;
+    padding: 1px 1px;
     text-align: center;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    font-weight: 600;
+    font-weight: 700;
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
     overflow: hidden;
-    text-overflow: ellipsis;
-    max-width: 42px;
+    text-overflow: clip;
+    color: #fff;
+    background: none;
+    border-radius: 0;
+    margin: 0;
+    width: 100%;
+    box-sizing: border-box;
 }
 
-/* Green for working time (on Done/Stop button) */
-.qa-timer-working { color: #27ae60; }
-.dark-mode .qa-timer-working { color: #2ecc71; }
+/* Stopwatch icon inside timer badge */
+.qa-timer-badge .qa-ti {
+    flex-shrink: 0;
+    font-size: 9px;
+    opacity: 0.8;
+}
 
-/* Orange for waiting time (on Start button) */
-.qa-timer-waiting { color: #e67e22; }
-.dark-mode .qa-timer-waiting { color: #f39c12; }
+/* ======================================================
+   DEADLINE COUNTDOWN BADGE
+   ====================================================== */
+
+/* Deadline badge — inside the button (desktop) or strip below (mobile) */
+.qa-deadline-badge {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    font-size: 10px;
+    line-height: 1;
+    padding: 1px 1px;
+    text-align: center;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: clip;
+    border-radius: 0;
+    color: #fff;
+    background: none;
+    margin: 0;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+/* Hourglass icon inside deadline badge */
+.qa-deadline-badge .qa-dl-icon {
+    flex-shrink: 0;
+    font-size: 9px;
+    opacity: 0.8;
+}
+
+/* Overdue — bright red text, no background, slightly smaller to fit minus sign */
+.qa-deadline-overdue {
+    color: #ff1744 !important;
+    background: none !important;
+    font-size: 9px !important;
+}
 
 /* ======================================================
    UNDO BAR
@@ -333,6 +409,9 @@ th.qa-actions-header {
         gap: 0;
         white-space: normal;
         text-align: center;
+        background: transparent;
+        max-width: 22px;
+        margin-bottom: 0;
     }
 
     /* Timer inside button — uniform color (no overlay, no separator) */
@@ -344,6 +423,15 @@ th.qa-actions-header {
         background: transparent !important;
         color: #fff !important;
         align-self: stretch;
+    }
+
+    /* Stopwatch icon at top of mobile timer strip */
+    .qa-timer-badge .qa-ti {
+        display: block;
+        font-size: 9px;
+        line-height: 1;
+        opacity: 0.8;
+        margin-bottom: 2px;
     }
 
     /* Label: H / M / S */
@@ -371,6 +459,33 @@ th.qa-actions-header {
         background: rgba(255, 255, 255, 0.45);
         margin: 2px 0;
         flex-shrink: 0;
+    }
+
+    /* Mobile deadline badge — compact strip BELOW the button */
+    .qa-deadline-badge {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 2px;
+        width: 100%;
+        max-width: none;
+        font-size: 8px;
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+        text-align: center;
+        padding: 3px 2px;
+        margin-top: 0;
+        border-radius: 0 0 6px 6px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        color: #1a7bb5;
+        background: rgba(41, 128, 185, 0.12);
+    }
+
+    .qa-deadline-badge.qa-deadline-overdue {
+        color: #c0392b !important;
+        background: rgba(231, 76, 60, 0.15) !important;
     }
 
     /* Button fills full 44px column — timer inside left, icon right */
