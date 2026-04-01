@@ -1541,4 +1541,23 @@ class QuickButtonsAjax extends AjaxController {
 
         return $this->json_encode(array('success' => true, 'message' => __('Mapping saved')));
     }
+
+    // ================================================================
+    //  Plugin Upgrade (admin-confirmed)
+    // ================================================================
+
+    function executeUpgradeAjax() {
+        $this->requireStaff();
+        global $thisstaff;
+        if (!$thisstaff || !$thisstaff->isAdmin())
+            return $this->json_encode(array('success' => false, 'error' => __('Admin access required')));
+
+        require_once dirname(__FILE__) . '/class.QuickButtonsPlugin.php';
+
+        if (!QuickButtonsPlugin::isUpgradePending())
+            return $this->json_encode(array('success' => true, 'version' => QuickButtonsPlugin::CURRENT_SCHEMA, 'msg' => 'Already up to date'));
+
+        $result = QuickButtonsPlugin::executeUpgrade();
+        return $this->json_encode($result);
+    }
 }

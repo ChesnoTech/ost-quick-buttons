@@ -3,13 +3,15 @@
  * Quick Buttons Plugin - Main Class
  *
  * @author  ChesnoTech
- * @version 3.2.0
+ * @version 4.1.0
  */
 
 require_once 'config.php';
 
 class QuickButtonsPlugin extends Plugin {
     var $config_class = 'QuickButtonsConfig';
+
+    const CURRENT_SCHEMA = '4.1.0';
 
     static private $bootstrapped = false;
 
@@ -18,53 +20,203 @@ class QuickButtonsPlugin extends Plugin {
     }
 
     /**
-     * Run migrations when plugin version changes.
-     * Called automatically by osTicket on version mismatch.
+     * Prevent osTicket's auto-upgrade from running without confirmation.
+     * We handle upgrades manually via the admin UI.
      */
     function pre_upgrade(&$errors) {
-        self::runMigrations();
-        return true;
+        // Don't auto-upgrade — let admin confirm via the UI banner
+        return false;
     }
 
+    // ================================================================
+    //  Upgrade detection & admin banner
+    // ================================================================
+
     /**
-     * Run migrations once per version upgrade.
-     * Uses a config key to track the last migrated version.
+     * Check if a database upgrade is pending.
+     * Compares migrated_version in DB against CURRENT_SCHEMA.
      */
-    private static function runMigrationsOnce() {
-        $currentVersion = '4.1.0';
+    static function isUpgradePending() {
         $ns = 'plugin.quick-buttons.meta';
         $res = db_query(sprintf(
             "SELECT value FROM %s WHERE namespace = '%s' AND `key` = 'migrated_version'",
             CONFIG_TABLE, $ns));
         $row = $res ? db_fetch_row($res) : null;
         $migrated = $row ? $row[0] : '0';
-        if (version_compare($migrated, $currentVersion, '>='))
+        return version_compare($migrated, self::CURRENT_SCHEMA, '<');
+    }
+
+    /**
+     * Get the currently migrated version from DB.
+     */
+    static function getMigratedVersion() {
+        $ns = 'plugin.quick-buttons.meta';
+        $res = db_query(sprintf(
+            "SELECT value FROM %s WHERE namespace = '%s' AND `key` = 'migrated_version'",
+            CONFIG_TABLE, $ns));
+        $row = $res ? db_fetch_row($res) : null;
+        return $row ? $row[0] : '0';
+    }
+
+    /**
+     * Inject an upgrade banner into admin pages when upgrade is pending.
+     */
+    static function injectUpgradeBanner(&$buffer) {
+        if (!self::isUpgradePending())
             return;
 
-        // Create backups before any migration
-        self::backupDatabase($migrated, $currentVersion);
-        self::backupFiles($migrated, $currentVersion);
+        $from = self::getMigratedVersion();
+        $to = self::CURRENT_SCHEMA;
+        $csrfToken = '';
+        if (preg_match('/name="__CSRFToken__"[^>]*value="([^"]+)"/', $buffer, $m))
+            $csrfToken = $m[1];
 
-        self::runMigrations();
+        $banner = '
+<div id="qa-upgrade-banner" style="
+    background: linear-gradient(135deg, #ff9800, #f57c00);
+    color: #fff;
+    padding: 16px 24px;
+    margin: 10px 15px;
+    border-radius: 8px;
+    font-family: -apple-system, BlinkMacSystemFont, \'Segoe UI\', sans-serif;
+    font-size: 14px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    display: flex;
+    align-items: center;
+    gap: 16px;
+">
+    <span style="font-size: 28px;">&#9888;</span>
+    <div style="flex:1;">
+        <strong>Quick Buttons — Database Update Required</strong><br>
+        <span style="opacity:0.9;font-size:13px;">
+            Schema version <strong>' . htmlspecialchars($from ?: 'none') . '</strong>
+            &rarr; <strong>' . htmlspecialchars($to) . '</strong>.
+            A backup will be created automatically before upgrading.
+        </span>
+    </div>
+    <button id="qa-upgrade-btn" onclick="QAUpgrade.run()" style="
+        background: #fff;
+        color: #e65100;
+        border: none;
+        padding: 10px 24px;
+        border-radius: 6px;
+        font-size: 14px;
+        font-weight: 700;
+        cursor: pointer;
+        white-space: nowrap;
+        box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+    ">&#x2B06; Upgrade Now</button>
+</div>
+<script>
+var QAUpgrade = {
+    run: function() {
+        var btn = document.getElementById("qa-upgrade-btn");
+        if (!confirm("This will:\\n\\n1. Backup database config\\n2. Backup plugin files\\n3. Run schema migrations\\n\\nProceed with upgrade?"))
+            return;
+        btn.disabled = true;
+        btn.textContent = "Upgrading...";
+        btn.style.opacity = "0.7";
+        var xhr = new XMLHttpRequest();
+        xhr.open("POST", "ajax.php/quick-buttons/upgrade", true);
+        xhr.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+        xhr.setRequestHeader("X-CSRFToken", "' . $csrfToken . '");
+        xhr.onload = function() {
+            if (xhr.status === 200) {
+                try {
+                    var res = JSON.parse(xhr.responseText);
+                    if (res.success) {
+                        var banner = document.getElementById("qa-upgrade-banner");
+                        banner.style.background = "linear-gradient(135deg, #4caf50, #388e3c)";
+                        banner.innerHTML = \'<span style="font-size:28px;">&#x2705;</span>\' +
+                            \'<div style="flex:1;"><strong>Upgrade Complete!</strong><br>\' +
+                            \'<span style="opacity:0.9;font-size:13px;">Schema updated to v\' + res.version +
+                            \'. Backups saved to <code>backups/</code> directory.</span></div>\';
+                    } else {
+                        btn.textContent = "Retry Upgrade";
+                        btn.disabled = false;
+                        btn.style.opacity = "1";
+                        alert("Upgrade failed: " + (res.error || "Unknown error"));
+                    }
+                } catch(e) {
+                    btn.textContent = "Retry Upgrade";
+                    btn.disabled = false;
+                    btn.style.opacity = "1";
+                    alert("Upgrade failed: Invalid response");
+                }
+            } else {
+                btn.textContent = "Retry Upgrade";
+                btn.disabled = false;
+                btn.style.opacity = "1";
+                alert("Upgrade failed: HTTP " + xhr.status);
+            }
+        };
+        xhr.onerror = function() {
+            btn.textContent = "Retry Upgrade";
+            btn.disabled = false;
+            btn.style.opacity = "1";
+            alert("Network error during upgrade");
+        };
+        xhr.send("__CSRFToken__=' . urlencode($csrfToken) . '");
+    }
+};
+</script>';
 
-        // Update or insert the migrated version flag
-        if ($migrated === '0') {
-            db_query(sprintf(
-                "INSERT INTO %s (namespace, `key`, value) VALUES ('%s', 'migrated_version', '%s')",
-                CONFIG_TABLE, $ns, $currentVersion));
-        } else {
-            db_query(sprintf(
-                "UPDATE %s SET value = '%s' WHERE namespace = '%s' AND `key` = 'migrated_version'",
-                CONFIG_TABLE, $currentVersion, $ns));
+        // Inject after the opening of the main content area
+        $pos = strpos($buffer, 'id="pjax-container"');
+        if ($pos !== false) {
+            $insertPos = strpos($buffer, '>', $pos);
+            if ($insertPos !== false)
+                $buffer = substr_replace($buffer, '>' . $banner, $insertPos, 1);
         }
     }
 
     // ================================================================
-    //  Pre-upgrade backups
+    //  Upgrade execution (called via AJAX)
+    // ================================================================
+
+    /**
+     * Execute the full upgrade: backup + migrate + set version flag.
+     * Returns array with success/error status.
+     */
+    static function executeUpgrade() {
+        if (!self::isUpgradePending())
+            return array('success' => true, 'version' => self::CURRENT_SCHEMA, 'msg' => 'Already up to date');
+
+        $fromVersion = self::getMigratedVersion();
+        $toVersion = self::CURRENT_SCHEMA;
+        $ns = 'plugin.quick-buttons.meta';
+
+        // Step 1: Create backups
+        $dbOk = self::backupDatabase($fromVersion, $toVersion);
+        $filesOk = self::backupFiles($fromVersion, $toVersion);
+
+        if (!$dbOk || !$filesOk)
+            return array('success' => false, 'error' => 'Backup failed. Check backups/ directory permissions.');
+
+        // Step 2: Run migrations
+        self::runMigrations();
+
+        // Step 3: Set version flag
+        if ($fromVersion === '0') {
+            db_query(sprintf(
+                "INSERT INTO %s (namespace, `key`, value) VALUES ('%s', 'migrated_version', '%s')",
+                CONFIG_TABLE, $ns, $toVersion));
+        } else {
+            db_query(sprintf(
+                "UPDATE %s SET value = '%s' WHERE namespace = '%s' AND `key` = 'migrated_version'",
+                CONFIG_TABLE, $toVersion, $ns));
+        }
+
+        return array('success' => true, 'version' => $toVersion);
+    }
+
+    // ================================================================
+    //  Backups
     // ================================================================
 
     /**
      * Backup all plugin-related config rows to a SQL file.
+     * Returns true on success.
      */
     private static function backupDatabase($fromVersion, $toVersion) {
         $backupDir = dirname(__FILE__) . '/backups';
@@ -101,12 +253,14 @@ class QuickButtonsPlugin extends Plugin {
                  . "-- Re-insert original values\n"
                  . "INSERT INTO " . CONFIG_TABLE . " (namespace, `key`, value) VALUES\n"
                  . implode(",\n", $rows) . ";\n";
-            @file_put_contents($file, $sql);
+            return @file_put_contents($file, $sql) !== false;
         }
+        return true; // No rows to back up is still success
     }
 
     /**
      * Backup plugin PHP/JS/CSS files to a timestamped zip or directory.
+     * Returns true on success.
      */
     private static function backupFiles($fromVersion, $toVersion) {
         $backupDir = dirname(__FILE__) . '/backups';
@@ -115,48 +269,43 @@ class QuickButtonsPlugin extends Plugin {
 
         $timestamp = date('Ymd_His');
         $pluginDir = dirname(__FILE__);
+        $filesToBackup = array(
+            'plugin.php', 'config.php',
+            'class.QuickButtonsPlugin.php', 'class.QuickButtonsAjax.php',
+            'assets/quick-buttons.js', 'assets/quick-buttons.css',
+        );
 
-        // Try zip first, fall back to directory copy
-        $zipFile = $backupDir . "/files_backup_{$fromVersion}_to_{$toVersion}_{$timestamp}.zip";
+        // Try zip first
         if (class_exists('ZipArchive')) {
+            $zipFile = $backupDir . "/files_backup_{$fromVersion}_to_{$toVersion}_{$timestamp}.zip";
             $zip = new \ZipArchive();
             if ($zip->open($zipFile, \ZipArchive::CREATE | \ZipArchive::OVERWRITE) === true) {
-                $filesToBackup = array(
-                    'plugin.php',
-                    'config.php',
-                    'class.QuickButtonsPlugin.php',
-                    'class.QuickButtonsAjax.php',
-                    'assets/quick-buttons.js',
-                    'assets/quick-buttons.css',
-                );
                 foreach ($filesToBackup as $f) {
                     $fullPath = $pluginDir . '/' . $f;
                     if (file_exists($fullPath))
                         $zip->addFile($fullPath, $f);
                 }
                 $zip->close();
-                return;
+                return file_exists($zipFile);
             }
         }
 
-        // Fallback: copy files to a backup subdirectory
+        // Fallback: copy files
         $copyDir = $backupDir . "/files_{$fromVersion}_to_{$toVersion}_{$timestamp}";
         @mkdir($copyDir, 0755, true);
         @mkdir($copyDir . '/assets', 0755, true);
-        $filesToBackup = array(
-            'plugin.php',
-            'config.php',
-            'class.QuickButtonsPlugin.php',
-            'class.QuickButtonsAjax.php',
-            'assets/quick-buttons.js',
-            'assets/quick-buttons.css',
-        );
+        $ok = true;
         foreach ($filesToBackup as $f) {
             $src = $pluginDir . '/' . $f;
             if (file_exists($src))
-                @copy($src, $copyDir . '/' . $f);
+                $ok = $ok && @copy($src, $copyDir . '/' . $f);
         }
+        return $ok;
     }
+
+    // ================================================================
+    //  Migrations
+    // ================================================================
 
     /**
      * Database migrations for version upgrades.
@@ -169,9 +318,6 @@ class QuickButtonsPlugin extends Plugin {
         self::migrate_410_stopIcon();
     }
 
-    /**
-     * v4.1.0: Add show_deadline=1 to all widget instances missing it.
-     */
     private static function migrate_410_showDeadline() {
         $res = db_query("SELECT DISTINCT c1.namespace
             FROM " . CONFIG_TABLE . " c1
@@ -192,15 +338,16 @@ class QuickButtonsPlugin extends Plugin {
         }
     }
 
-    /**
-     * v4.1.0: Update button_icon from stacked icon-check+icon-share to icon-ok-sign.
-     */
     private static function migrate_410_stopIcon() {
         db_query("UPDATE " . CONFIG_TABLE . " SET value = '{\"icon-ok-sign\":\"OK Sign (Bold Checkmark)\"}'
             WHERE `key` = 'button_icon'
               AND value LIKE '%icon-check+icon-share%'
               AND namespace LIKE 'plugin.%.instance.%'");
     }
+
+    // ================================================================
+    //  Standard plugin hooks
+    // ================================================================
 
     static function registerTranslations() {
         if (method_exists('Plugin', 'translate')) {
@@ -214,8 +361,6 @@ class QuickButtonsPlugin extends Plugin {
         self::$bootstrapped = true;
 
         self::registerTranslations();
-        // Run migrations once if needed — check a flag in config
-        self::runMigrationsOnce();
 
         if (!defined('STAFFINC_DIR'))
             return;
@@ -232,6 +377,7 @@ class QuickButtonsPlugin extends Plugin {
                 url('^widgets$', 'getWidgets'),
                 url_post('^execute$', 'execute'),
                 url_post('^undo$', 'undo'),
+                url_post('^upgrade$', 'executeUpgradeAjax'),
                 url_get('^dashboard$', 'dashboard'),
                 url_get('^dashboard-page$', 'serveDashboardPage'),
                 url_get('^agent-perf-page$', 'serveAgentPerfPage'),
@@ -255,6 +401,12 @@ class QuickButtonsPlugin extends Plugin {
                 || strpos($buffer, '</body>') === false)
             return $buffer;
 
+        // Inject upgrade banner on admin pages if upgrade is pending
+        $isAdminPage = (strpos($_SERVER['REQUEST_URI'] ?? '', 'admin.php') !== false
+            || strpos($_SERVER['REQUEST_URI'] ?? '', 'plugins.php') !== false);
+        if ($isAdminPage)
+            self::injectUpgradeBanner($buffer);
+
         $base = ROOT_PATH . 'scp/ajax.php/quick-buttons/assets';
         $dir = dirname(__FILE__) . '/assets/';
         $v = max(
@@ -276,11 +428,10 @@ class QuickButtonsPlugin extends Plugin {
             '<script type="text/javascript" src="%s/admin-js?v=%s"></script>',
             $base, $v);
 
-        // Only inject admin assets on plugin admin pages
-        $isAdminPage = (strpos($_SERVER['REQUEST_URI'] ?? '', 'plugins.php') !== false);
+        $isPluginPage = (strpos($_SERVER['REQUEST_URI'] ?? '', 'plugins.php') !== false);
         $headInject = $css;
         $bodyInject = $js;
-        if ($isAdminPage) {
+        if ($isPluginPage) {
             $headInject .= "\n" . $adminCss;
             $bodyInject .= "\n" . $adminJs;
         }
