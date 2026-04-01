@@ -40,7 +40,13 @@ class QuickButtonsPlugin extends Plugin {
         $migrated = $row ? $row[0] : '0';
         if (version_compare($migrated, $currentVersion, '>='))
             return;
+
+        // Create backups before any migration
+        self::backupDatabase($migrated, $currentVersion);
+        self::backupFiles($migrated, $currentVersion);
+
         self::runMigrations();
+
         // Update or insert the migrated version flag
         if ($migrated === '0') {
             db_query(sprintf(
@@ -50,6 +56,105 @@ class QuickButtonsPlugin extends Plugin {
             db_query(sprintf(
                 "UPDATE %s SET value = '%s' WHERE namespace = '%s' AND `key` = 'migrated_version'",
                 CONFIG_TABLE, $currentVersion, $ns));
+        }
+    }
+
+    // ================================================================
+    //  Pre-upgrade backups
+    // ================================================================
+
+    /**
+     * Backup all plugin-related config rows to a SQL file.
+     */
+    private static function backupDatabase($fromVersion, $toVersion) {
+        $backupDir = dirname(__FILE__) . '/backups';
+        if (!is_dir($backupDir))
+            @mkdir($backupDir, 0755, true);
+
+        $timestamp = date('Ymd_His');
+        $file = $backupDir . "/db_backup_{$fromVersion}_to_{$toVersion}_{$timestamp}.sql";
+
+        $rows = array();
+        $res = db_query("SELECT * FROM " . CONFIG_TABLE
+            . " WHERE namespace LIKE 'plugin.%.instance.%'"
+            . " OR namespace LIKE 'plugin.quick-buttons.%'"
+            . " ORDER BY namespace, `key`");
+        if ($res) {
+            while ($row = db_fetch_array($res)) {
+                $vals = array(
+                    db_input($row['namespace']),
+                    db_input($row['key']),
+                    db_input($row['value']),
+                );
+                $rows[] = sprintf("(%s, %s, %s)", $vals[0], $vals[1], $vals[2]);
+            }
+        }
+
+        if ($rows) {
+            $sql = "-- Quick Buttons plugin DB backup\n"
+                 . "-- Date: " . date('Y-m-d H:i:s') . "\n"
+                 . "-- Upgrade: {$fromVersion} -> {$toVersion}\n"
+                 . "-- Restore: Run this SQL to revert config changes\n\n"
+                 . "-- Delete current plugin configs\n"
+                 . "DELETE FROM " . CONFIG_TABLE . " WHERE namespace LIKE 'plugin.%.instance.%'"
+                 . " OR namespace LIKE 'plugin.quick-buttons.%';\n\n"
+                 . "-- Re-insert original values\n"
+                 . "INSERT INTO " . CONFIG_TABLE . " (namespace, `key`, value) VALUES\n"
+                 . implode(",\n", $rows) . ";\n";
+            @file_put_contents($file, $sql);
+        }
+    }
+
+    /**
+     * Backup plugin PHP/JS/CSS files to a timestamped zip or directory.
+     */
+    private static function backupFiles($fromVersion, $toVersion) {
+        $backupDir = dirname(__FILE__) . '/backups';
+        if (!is_dir($backupDir))
+            @mkdir($backupDir, 0755, true);
+
+        $timestamp = date('Ymd_His');
+        $pluginDir = dirname(__FILE__);
+
+        // Try zip first, fall back to directory copy
+        $zipFile = $backupDir . "/files_backup_{$fromVersion}_to_{$toVersion}_{$timestamp}.zip";
+        if (class_exists('ZipArchive')) {
+            $zip = new \ZipArchive();
+            if ($zip->open($zipFile, \ZipArchive::CREATE | \ZipArchive::OVERWRITE) === true) {
+                $filesToBackup = array(
+                    'plugin.php',
+                    'config.php',
+                    'class.QuickButtonsPlugin.php',
+                    'class.QuickButtonsAjax.php',
+                    'assets/quick-buttons.js',
+                    'assets/quick-buttons.css',
+                );
+                foreach ($filesToBackup as $f) {
+                    $fullPath = $pluginDir . '/' . $f;
+                    if (file_exists($fullPath))
+                        $zip->addFile($fullPath, $f);
+                }
+                $zip->close();
+                return;
+            }
+        }
+
+        // Fallback: copy files to a backup subdirectory
+        $copyDir = $backupDir . "/files_{$fromVersion}_to_{$toVersion}_{$timestamp}";
+        @mkdir($copyDir, 0755, true);
+        @mkdir($copyDir . '/assets', 0755, true);
+        $filesToBackup = array(
+            'plugin.php',
+            'config.php',
+            'class.QuickButtonsPlugin.php',
+            'class.QuickButtonsAjax.php',
+            'assets/quick-buttons.js',
+            'assets/quick-buttons.css',
+        );
+        foreach ($filesToBackup as $f) {
+            $src = $pluginDir . '/' . $f;
+            if (file_exists($src))
+                @copy($src, $copyDir . '/' . $f);
         }
     }
 

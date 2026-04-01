@@ -1,0 +1,4 @@
+# Upgrade backups (generated automatically, keep local only)
+backups/*.sql
+backups/*.zip
+backups/files_*/
