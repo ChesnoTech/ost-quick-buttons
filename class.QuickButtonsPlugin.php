@@ -17,6 +17,86 @@ class QuickButtonsPlugin extends Plugin {
         self::bootstrapStatic();
     }
 
+    /**
+     * Run migrations when plugin version changes.
+     * Called automatically by osTicket on version mismatch.
+     */
+    function pre_upgrade(&$errors) {
+        self::runMigrations();
+        return true;
+    }
+
+    /**
+     * Run migrations once per version upgrade.
+     * Uses a config key to track the last migrated version.
+     */
+    private static function runMigrationsOnce() {
+        $currentVersion = '4.1.0';
+        $ns = 'plugin.quick-buttons.meta';
+        $res = db_query(sprintf(
+            "SELECT value FROM %s WHERE namespace = '%s' AND `key` = 'migrated_version'",
+            CONFIG_TABLE, $ns));
+        $row = $res ? db_fetch_row($res) : null;
+        $migrated = $row ? $row[0] : '0';
+        if (version_compare($migrated, $currentVersion, '>='))
+            return;
+        self::runMigrations();
+        // Update or insert the migrated version flag
+        if ($migrated === '0') {
+            db_query(sprintf(
+                "INSERT INTO %s (namespace, `key`, value) VALUES ('%s', 'migrated_version', '%s')",
+                CONFIG_TABLE, $ns, $currentVersion));
+        } else {
+            db_query(sprintf(
+                "UPDATE %s SET value = '%s' WHERE namespace = '%s' AND `key` = 'migrated_version'",
+                CONFIG_TABLE, $currentVersion, $ns));
+        }
+    }
+
+    /**
+     * Database migrations for version upgrades.
+     * Safe to run multiple times — each migration checks before acting.
+     */
+    static function runMigrations() {
+        // v4.1.0: Enable show_deadline on all existing instances that don't have it
+        self::migrate_410_showDeadline();
+        // v4.1.0: Update stop icon from stacked to emoji checkmark
+        self::migrate_410_stopIcon();
+    }
+
+    /**
+     * v4.1.0: Add show_deadline=1 to all widget instances missing it.
+     */
+    private static function migrate_410_showDeadline() {
+        $res = db_query("SELECT DISTINCT c1.namespace
+            FROM " . CONFIG_TABLE . " c1
+            WHERE c1.namespace LIKE 'plugin.%.instance.%'
+              AND c1.namespace NOT IN (
+                  SELECT c2.namespace FROM " . CONFIG_TABLE . " c2
+                  WHERE c2.`key` = 'show_deadline'
+              )
+            GROUP BY c1.namespace");
+        if ($res) {
+            while ($row = db_fetch_row($res)) {
+                db_query(sprintf(
+                    "INSERT INTO %s (namespace, `key`, value) VALUES (%s, 'show_deadline', '1')",
+                    CONFIG_TABLE,
+                    db_input($row[0])
+                ));
+            }
+        }
+    }
+
+    /**
+     * v4.1.0: Update button_icon from stacked icon-check+icon-share to icon-ok-sign.
+     */
+    private static function migrate_410_stopIcon() {
+        db_query("UPDATE " . CONFIG_TABLE . " SET value = '{\"icon-ok-sign\":\"OK Sign (Bold Checkmark)\"}'
+            WHERE `key` = 'button_icon'
+              AND value LIKE '%icon-check+icon-share%'
+              AND namespace LIKE 'plugin.%.instance.%'");
+    }
+
     static function registerTranslations() {
         if (method_exists('Plugin', 'translate')) {
             list($__, $_N) = Plugin::translate('quick-buttons');
@@ -29,6 +109,8 @@ class QuickButtonsPlugin extends Plugin {
         self::$bootstrapped = true;
 
         self::registerTranslations();
+        // Run migrations once if needed — check a flag in config
+        self::runMigrationsOnce();
 
         if (!defined('STAFFINC_DIR'))
             return;
