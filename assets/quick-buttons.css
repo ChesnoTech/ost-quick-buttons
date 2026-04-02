@@ -371,15 +371,21 @@ th.qa-actions-header {
         display: none !important;
     }
 
-    /* Mobile uses a div prepended to the <tr> card — button is sole child */
+    /* Mobile uses a div prepended to the <tr> card — unified colored block */
     .qa-row-actions {
         position: absolute;
         left: 0;
         top: 0;
         bottom: 10px; /* match card bottom padding */
         width: 44px;
+        display: flex;
         flex-direction: column;
+        align-items: center;
         gap: 0;
+        border-radius: 6px;
+        overflow: hidden;
+        color: #fff;
+        padding: 4px 0;
     }
 
     /* Card gets left padding for button column */
@@ -388,41 +394,30 @@ th.qa-actions-header {
         padding-left: 44px !important;
     }
 
-    /* Mobile timer badge — narrow left strip with labeled H/M/S structure */
+    /* Mobile timer badge — full-width vertical stack above button */
     .qa-timer-badge {
         display: flex;
         flex-direction: column;
         align-items: center;
         justify-content: center;
-        width: 22px;
-        min-width: 22px;
-        max-width: 22px;
+        flex-shrink: 0;
+        width: 44px;
+        min-width: 44px;
+        max-width: 44px;
         height: auto;
-        align-self: stretch;
         font-size: 9px;
         font-weight: 600;
         font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
         font-variant-numeric: tabular-nums;
-        border-radius: 6px 0 0 6px;
+        border-radius: 0;
         padding: 4px 2px;
         overflow: hidden;
         gap: 0;
         white-space: normal;
         text-align: center;
         background: transparent;
-        max-width: 22px;
-        margin-bottom: 0;
-    }
-
-    /* Timer inside button — uniform color (no overlay, no separator) */
-    .qa-inline-btn .qa-timer-badge {
-        width: 22px;
-        min-width: 22px;
-        max-width: 22px;
-        border-radius: 0;
-        background: transparent !important;
         color: #fff !important;
-        align-self: stretch;
+        margin-bottom: 0;
     }
 
     /* Stopwatch icon at top of mobile timer strip */
@@ -461,44 +456,93 @@ th.qa-actions-header {
         flex-shrink: 0;
     }
 
-    /* Mobile deadline badge — compact strip BELOW the button */
+    /* Mobile deadline badge — vertical stack below button (mirrors timer) */
     .qa-deadline-badge {
         display: flex;
+        flex-direction: column;
         align-items: center;
         justify-content: center;
-        gap: 2px;
-        width: 100%;
-        max-width: none;
-        font-size: 8px;
-        font-weight: 700;
+        flex-shrink: 0;
+        gap: 0;
+        width: 44px;
+        min-width: 44px;
+        max-width: 44px;
+        font-size: 9px;
+        font-weight: 600;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
         font-variant-numeric: tabular-nums;
         text-align: center;
-        padding: 3px 2px;
+        padding: 4px 2px;
         margin-top: 0;
-        border-radius: 0 0 6px 6px;
-        white-space: nowrap;
+        border-radius: 0;
         overflow: hidden;
-        text-overflow: ellipsis;
-        color: #1a7bb5;
-        background: rgba(41, 128, 185, 0.12);
+        white-space: normal;
+        color: #fff !important;
+        background: transparent;
     }
 
     .qa-deadline-badge.qa-deadline-overdue {
-        color: #c0392b !important;
-        background: rgba(231, 76, 60, 0.15) !important;
+        color: #ff1744 !important;
+        background: transparent !important;
     }
 
-    /* Button fills full 44px column — timer inside left, icon right */
+    /* Deadline icon */
+    .qa-deadline-badge .qa-dl-icon {
+        display: block;
+        font-size: 9px;
+        line-height: 1;
+        opacity: 0.8;
+        margin-bottom: 2px;
+    }
+
+    /* Deadline label: H / M / S / D */
+    .qa-deadline-badge .qa-dl-label {
+        font-size: 7px;
+        font-weight: 600;
+        opacity: 0.8;
+        line-height: 1;
+        display: block;
+    }
+
+    /* Deadline value: 1 / 20 / 57 */
+    .qa-deadline-badge .qa-dl-value {
+        font-size: 10px;
+        font-weight: bold;
+        line-height: 1.1;
+        display: block;
+    }
+
+    /* Deadline separator (reuse timer separator style) */
+    .qa-deadline-badge .qa-ts {
+        display: block;
+        width: 12px;
+        height: 1px;
+        background: rgba(255, 255, 255, 0.45);
+        margin: 2px 0;
+        flex-shrink: 0;
+    }
+
+    /* Overdue minus sign */
+    .qa-deadline-badge .qa-dl-neg {
+        font-size: 8px;
+        font-weight: bold;
+        color: rgba(255, 255, 255, 0.85);
+    }
+
+    /* Button — centered icon only, parent has background color */
     .qa-inline-btn {
         flex: 1;
-        width: 100%;
+        width: 44px;
         height: auto;
-        border-radius: 0 6px 6px 0;
+        min-height: 32px;
+        border-radius: 0;
         font-size: 18px;
         box-shadow: none;
         display: flex;
-        flex-direction: row;
-        align-items: stretch;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        background: transparent !important;
         -webkit-tap-highlight-color: rgba(0,0,0,0.1);
     }
 
@@ -553,6 +597,8 @@ th.qa-actions-header {
     .dark-mode .qa-inline-btn {
         box-shadow: none;
     }
+
+    /* Dark mode — text stays white on colored bg, no changes needed */
 }
 
 /* ================================================================

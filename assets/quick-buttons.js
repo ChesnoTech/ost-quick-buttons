@@ -236,12 +236,14 @@
 
                 if (isMobile) {
                     var $actions = $('<div class="qa-row-actions"></div>');
+                    // Mobile: vertical stack — timer on top, button in middle, deadline on bottom
+                    // All share button color as one unified block
+                    $actions.css('background-color', color);
                     var $timerElM = $link.data('timer-el');
-                    if ($timerElM) $link.prepend($timerElM); // elapsed timer left side
-                    $actions.append($link);
-                    // Deadline badge below button (not inside it — 44px can't fit two strips + icon)
+                    if ($timerElM) $actions.append($timerElM);  // timer ABOVE button
+                    $actions.append($link);                      // button icon only
                     var $dlElM = $link.data('deadline-el');
-                    if ($dlElM) $actions.append($dlElM);
+                    if ($dlElM) $actions.append($dlElM);         // deadline BELOW button
                     $row.addClass('has-qa-inline').prepend($actions);
                 } else {
                     // Desktop: everything INSIDE the button — fills the row height
@@ -308,36 +310,82 @@
             var d = Math.floor(h / 24);
             var rh = h % 24;
             var parts = [];
-            // Stopwatch icon at top of vertical stack
+            // Stopwatch icon at top
             parts.push('<span class="qa-ti">\u23F1</span>');
+            // Small unit on top, large unit below — value then label
             if (d > 0) {
                 parts.push(
-                    '<span class="qa-tl">' + lD + '</span>' +
-                    '<span class="qa-tv">' + d + '</span>' +
-                    '<span class="qa-ts"></span>' +
+                    '<span class="qa-tv">' + rh + '</span>' +
                     '<span class="qa-tl">' + lH + '</span>' +
-                    '<span class="qa-tv">' + rh + '</span>'
+                    '<span class="qa-ts"></span>' +
+                    '<span class="qa-tv">' + d + '</span>' +
+                    '<span class="qa-tl">' + lD + '</span>'
                 );
             } else if (h > 0) {
                 parts.push(
-                    '<span class="qa-tl">' + lH + '</span>' +
-                    '<span class="qa-tv">' + h + '</span>' +
-                    '<span class="qa-ts"></span>' +
+                    '<span class="qa-tv">' + (m < 10 ? '0' + m : m) + '</span>' +
                     '<span class="qa-tl">' + lM + '</span>' +
-                    '<span class="qa-tv">' + (m < 10 ? '0' + m : m) + '</span>'
+                    '<span class="qa-ts"></span>' +
+                    '<span class="qa-tv">' + h + '</span>' +
+                    '<span class="qa-tl">' + lH + '</span>'
                 );
             } else if (m > 0) {
                 parts.push(
-                    '<span class="qa-tl">' + lM + '</span>' +
-                    '<span class="qa-tv">' + m + '</span>' +
-                    '<span class="qa-ts"></span>' +
+                    '<span class="qa-tv">' + (s < 10 ? '0' + s : s) + '</span>' +
                     '<span class="qa-tl">' + lS + '</span>' +
-                    '<span class="qa-tv">' + (s < 10 ? '0' + s : s) + '</span>'
+                    '<span class="qa-ts"></span>' +
+                    '<span class="qa-tv">' + m + '</span>' +
+                    '<span class="qa-tl">' + lM + '</span>'
                 );
             } else {
                 parts.push(
-                    '<span class="qa-tl">' + lS + '</span>' +
-                    '<span class="qa-tv">' + s + '</span>'
+                    '<span class="qa-tv">' + s + '</span>' +
+                    '<span class="qa-tl">' + lS + '</span>'
+                );
+            }
+            return parts.join('');
+        },
+
+        // Mobile vertical deadline layout — mirrors renderTimerHtml but with ⏳
+        renderDeadlineHtml: function(totalSec, isOverdue) {
+            var lH = QA.i18n.labelH || 'H';
+            var lM = QA.i18n.labelM || 'M';
+            var lS = QA.i18n.labelS || 'S';
+            var lD = QA.i18n.labelD || 'D';
+            var d = Math.floor(totalSec / 86400);
+            var h = Math.floor((totalSec % 86400) / 3600);
+            var m = Math.floor((totalSec % 3600) / 60);
+            var s = totalSec % 60;
+            var parts = [];
+            parts.push('<span class="qa-dl-icon">\u23F3</span>');
+            if (d > 0) {
+                parts.push(
+                    '<span class="qa-dl-value">' + h + '</span>' +
+                    '<span class="qa-dl-label">' + lH + '</span>' +
+                    '<span class="qa-ts"></span>' +
+                    '<span class="qa-dl-value">' + d + '</span>' +
+                    '<span class="qa-dl-label">' + lD + '</span>'
+                );
+            } else if (h > 0) {
+                parts.push(
+                    '<span class="qa-dl-value">' + (m < 10 ? '0' + m : m) + '</span>' +
+                    '<span class="qa-dl-label">' + lM + '</span>' +
+                    '<span class="qa-ts"></span>' +
+                    '<span class="qa-dl-value">' + h + '</span>' +
+                    '<span class="qa-dl-label">' + lH + '</span>'
+                );
+            } else if (m > 0) {
+                parts.push(
+                    '<span class="qa-dl-value">' + (s < 10 ? '0' + s : s) + '</span>' +
+                    '<span class="qa-dl-label">' + lS + '</span>' +
+                    '<span class="qa-ts"></span>' +
+                    '<span class="qa-dl-value">' + m + '</span>' +
+                    '<span class="qa-dl-label">' + lM + '</span>'
+                );
+            } else {
+                parts.push(
+                    '<span class="qa-dl-value">' + s + '</span>' +
+                    '<span class="qa-dl-label">' + lS + '</span>'
                 );
             }
             return parts.join('');
@@ -368,7 +416,11 @@
                 var isOverdue = remainSec < 0;
                 var absSec = Math.abs(remainSec);
                 dl.$el.toggleClass('qa-deadline-overdue', isOverdue);
-                dl.$el.find('.qa-dl-text').text((isOverdue ? '-' : '') + QA.formatDuration(absSec));
+                if (isMobile) {
+                    dl.$el.html(QA.renderDeadlineHtml(absSec, isOverdue));
+                } else {
+                    dl.$el.find('.qa-dl-text').text((isOverdue ? '-' : '') + QA.formatDuration(absSec));
+                }
             }
         },
 
