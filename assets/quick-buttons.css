@@ -28,9 +28,11 @@ th.qa-actions-header {
     position: sticky;
     right: 0;
     z-index: 16;
-    width: 1px;
-    padding: 0 !important;
+    width: 90px;
+    padding: 4px !important;
     background: inherit;
+    text-align: center;
+    font-size: 12px;
 }
 
 /* Each inline button — fills the cell, vertical stack */
@@ -423,27 +425,33 @@ th.qa-actions-header {
     /* Stopwatch icon at top of mobile timer strip */
     .qa-timer-badge .qa-ti {
         display: block;
-        font-size: 9px;
+        font-size: 11px;
         line-height: 1;
         opacity: 0.8;
         margin-bottom: 2px;
     }
 
+    /* Row: value + label on same line */
+    .qa-timer-badge .qa-t-row {
+        display: flex;
+        align-items: baseline;
+        justify-content: center;
+        gap: 2px;
+    }
+
     /* Label: H / M / S */
     .qa-timer-badge .qa-tl {
-        font-size: 7px;
+        font-size: 9px;
         font-weight: 600;
         opacity: 0.8;
         line-height: 1;
-        display: block;
     }
 
     /* Value: 1 / 20 / 57 */
     .qa-timer-badge .qa-tv {
-        font-size: 10px;
+        font-size: 14px;
         font-weight: bold;
         line-height: 1.1;
-        display: block;
     }
 
     /* Separator line between H/M/S rows */
@@ -482,31 +490,38 @@ th.qa-actions-header {
     }
 
     .qa-deadline-badge.qa-deadline-overdue {
-        color: #ff1744 !important;
+        color: #ffeb3b !important;
         background: transparent !important;
     }
 
     /* Deadline icon */
     .qa-deadline-badge .qa-dl-icon {
         display: block;
-        font-size: 9px;
+        font-size: 11px;
         line-height: 1;
         opacity: 0.8;
         margin-bottom: 2px;
     }
 
+    /* Row: value + label on same line */
+    .qa-deadline-badge .qa-dl-row {
+        display: flex;
+        align-items: baseline;
+        justify-content: center;
+        gap: 2px;
+    }
+
     /* Deadline label: H / M / S / D */
     .qa-deadline-badge .qa-dl-label {
-        font-size: 7px;
+        font-size: 9px;
         font-weight: 600;
         opacity: 0.8;
         line-height: 1;
-        display: block;
     }
 
     /* Deadline value: 1 / 20 / 57 */
     .qa-deadline-badge .qa-dl-value {
-        font-size: 10px;
+        font-size: 14px;
         font-weight: bold;
         line-height: 1.1;
         display: block;
@@ -529,19 +544,21 @@ th.qa-actions-header {
         color: rgba(255, 255, 255, 0.85);
     }
 
-    /* Button — centered icon only, parent has background color */
+    /* Button — fills space between timer and deadline, centers icon */
     .qa-inline-btn {
-        flex: 1;
+        flex: 1 1 0% !important;
+        flex-shrink: 1 !important;
         width: 44px;
-        height: auto;
-        min-height: 32px;
+        height: auto !important;
+        min-height: 0 !important;
         border-radius: 0;
         font-size: 18px;
         box-shadow: none;
-        display: flex;
-        flex-direction: column;
+        display: flex !important;
         align-items: center;
         justify-content: center;
+        gap: 0;
+        padding: 0;
         background: transparent !important;
         -webkit-tap-highlight-color: rgba(0,0,0,0.1);
     }

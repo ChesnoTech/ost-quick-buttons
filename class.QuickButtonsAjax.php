@@ -490,6 +490,7 @@ class QuickButtonsAjax extends AjaxController {
             'labelS'       => __('S'),
             'deadline'     => __('deadline'),
             'overdue'      => __('overdue'),
+            'actions'      => __('Actions'),
         );
     }
 
@@ -1433,7 +1434,7 @@ class QuickButtonsAjax extends AjaxController {
         $isOSTA = is_dir(rtrim(ROOT_DIR, '/') . '/osta');
         $cssFile = $isOSTA ? 'quick-buttons.css' : 'quick-buttons-default.css';
         $this->serveFile(dirname(__FILE__) . '/assets/' . $cssFile,
-            'text/css; charset=UTF-8');
+            'text/css; charset=UTF-8', 0);
     }
 
     function serveAdminJs() {

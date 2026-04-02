@@ -260,7 +260,7 @@
             if (hasAny && !isMobile) {
                 var $headerRow = $('form#tickets thead tr').first();
                 if ($headerRow.length)
-                    $headerRow.append('<th class="qa-actions-header"></th>');
+                    $headerRow.append('<th class="qa-actions-header">' + (QA.i18n.actions || 'Actions') + '</th>');
             }
 
             if (!isMobile) {
@@ -309,39 +309,17 @@
             var lS = QA.i18n.labelS || 'S';
             var d = Math.floor(h / 24);
             var rh = h % 24;
+            var R = function(v, l) { return '<span class="qa-t-row"><span class="qa-tv">' + v + '</span><span class="qa-tl">' + l + '</span></span>'; };
             var parts = [];
-            // Stopwatch icon at top
             parts.push('<span class="qa-ti">\u23F1</span>');
-            // Small unit on top, large unit below — value then label
             if (d > 0) {
-                parts.push(
-                    '<span class="qa-tv">' + rh + '</span>' +
-                    '<span class="qa-tl">' + lH + '</span>' +
-                    '<span class="qa-ts"></span>' +
-                    '<span class="qa-tv">' + d + '</span>' +
-                    '<span class="qa-tl">' + lD + '</span>'
-                );
+                parts.push(R(rh, lH) + '<span class="qa-ts"></span>' + R(d, lD));
             } else if (h > 0) {
-                parts.push(
-                    '<span class="qa-tv">' + (m < 10 ? '0' + m : m) + '</span>' +
-                    '<span class="qa-tl">' + lM + '</span>' +
-                    '<span class="qa-ts"></span>' +
-                    '<span class="qa-tv">' + h + '</span>' +
-                    '<span class="qa-tl">' + lH + '</span>'
-                );
+                parts.push(R(m < 10 ? '0' + m : m, lM) + '<span class="qa-ts"></span>' + R(h, lH));
             } else if (m > 0) {
-                parts.push(
-                    '<span class="qa-tv">' + (s < 10 ? '0' + s : s) + '</span>' +
-                    '<span class="qa-tl">' + lS + '</span>' +
-                    '<span class="qa-ts"></span>' +
-                    '<span class="qa-tv">' + m + '</span>' +
-                    '<span class="qa-tl">' + lM + '</span>'
-                );
+                parts.push(R(s < 10 ? '0' + s : s, lS) + '<span class="qa-ts"></span>' + R(m, lM));
             } else {
-                parts.push(
-                    '<span class="qa-tv">' + s + '</span>' +
-                    '<span class="qa-tl">' + lS + '</span>'
-                );
+                parts.push(R(s, lS));
             }
             return parts.join('');
         },
@@ -356,37 +334,17 @@
             var h = Math.floor((totalSec % 86400) / 3600);
             var m = Math.floor((totalSec % 3600) / 60);
             var s = totalSec % 60;
+            var R = function(v, l) { return '<span class="qa-dl-row"><span class="qa-dl-value">' + v + '</span><span class="qa-dl-label">' + l + '</span></span>'; };
             var parts = [];
             parts.push('<span class="qa-dl-icon">\u23F3</span>');
             if (d > 0) {
-                parts.push(
-                    '<span class="qa-dl-value">' + h + '</span>' +
-                    '<span class="qa-dl-label">' + lH + '</span>' +
-                    '<span class="qa-ts"></span>' +
-                    '<span class="qa-dl-value">' + d + '</span>' +
-                    '<span class="qa-dl-label">' + lD + '</span>'
-                );
+                parts.push(R(h, lH) + '<span class="qa-ts"></span>' + R(d, lD));
             } else if (h > 0) {
-                parts.push(
-                    '<span class="qa-dl-value">' + (m < 10 ? '0' + m : m) + '</span>' +
-                    '<span class="qa-dl-label">' + lM + '</span>' +
-                    '<span class="qa-ts"></span>' +
-                    '<span class="qa-dl-value">' + h + '</span>' +
-                    '<span class="qa-dl-label">' + lH + '</span>'
-                );
+                parts.push(R(m < 10 ? '0' + m : m, lM) + '<span class="qa-ts"></span>' + R(h, lH));
             } else if (m > 0) {
-                parts.push(
-                    '<span class="qa-dl-value">' + (s < 10 ? '0' + s : s) + '</span>' +
-                    '<span class="qa-dl-label">' + lS + '</span>' +
-                    '<span class="qa-ts"></span>' +
-                    '<span class="qa-dl-value">' + m + '</span>' +
-                    '<span class="qa-dl-label">' + lM + '</span>'
-                );
+                parts.push(R(s < 10 ? '0' + s : s, lS) + '<span class="qa-ts"></span>' + R(m, lM));
             } else {
-                parts.push(
-                    '<span class="qa-dl-value">' + s + '</span>' +
-                    '<span class="qa-dl-label">' + lS + '</span>'
-                );
+                parts.push(R(s, lS));
             }
             return parts.join('');
         },
@@ -419,7 +377,7 @@
                 if (isMobile) {
                     dl.$el.html(QA.renderDeadlineHtml(absSec, isOverdue));
                 } else {
-                    dl.$el.find('.qa-dl-text').text((isOverdue ? '-' : '') + QA.formatDuration(absSec));
+                    dl.$el.find('.qa-dl-text').text((isOverdue ? '- ' : '') + QA.formatDuration(absSec));
                 }
             }
         },
@@ -437,12 +395,12 @@
             var m = Math.floor((totalSec % 3600) / 60);
             var s = totalSec % 60;
             if (d > 0)
-                return d + 'd ' + h + 'h';
+                return h + ' H - ' + d + ' D';
             if (h > 0)
-                return h + 'h ' + (m < 10 ? '0' : '') + m + 'm';
+                return (m < 10 ? '0' : '') + m + ' M - ' + h + ' H';
             if (m > 0)
-                return m + 'm ' + (s < 10 ? '0' : '') + s + 's';
-            return s + 's';
+                return (s < 10 ? '0' : '') + s + ' S - ' + m + ' M';
+            return s + ' S';
         },
 
         // ================================================================
