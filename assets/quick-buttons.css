@@ -550,16 +550,16 @@ th.qa-actions-header {
         transform: none;
     }
 
-    /* Icon area fills remaining width, centered — overrides desktop 20px/24px sizing */
+    /* Icon — natural size, button's justify-content centers it */
     .qa-inline-btn > i {
-        flex: 1 !important;
+        flex: none !important;
         display: flex !important;
         align-items: center;
         justify-content: center;
         position: static !important;
         top: auto !important;
-        width: auto !important;
-        height: auto !important;
+        width: 20px !important;
+        height: 20px !important;
         filter: brightness(0) invert(1) !important;
     }
 
@@ -572,7 +572,7 @@ th.qa-actions-header {
     }
 
     .qa-inline-btn > .qa-icon-stack {
-        flex: 1 !important;
+        flex: none !important;
         display: flex !important;
         align-items: center;
         justify-content: center;
