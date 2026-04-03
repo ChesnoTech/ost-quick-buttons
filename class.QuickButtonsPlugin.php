@@ -73,20 +73,25 @@ class QuickButtonsPlugin extends Plugin {
 
         $banner = '
 <div id="qa-upgrade-banner" style="
+    position: sticky;
+    top: 0;
+    z-index: 99999;
     background: linear-gradient(135deg, #ff9800, #f57c00);
     color: #fff;
-    padding: 16px 24px;
-    margin: 10px 15px;
-    border-radius: 8px;
+    padding: 14px 24px;
+    margin: 0;
+    border-radius: 0;
     font-family: -apple-system, BlinkMacSystemFont, \'Segoe UI\', sans-serif;
     font-size: 14px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
     display: flex;
     align-items: center;
     gap: 16px;
+    min-height: 36px;
+    box-sizing: border-box;
 ">
-    <span style="font-size: 28px;">&#9888;</span>
-    <div style="flex:1;">
+    <span style="font-size: 24px; flex-shrink:0;">&#9888;</span>
+    <div style="flex:1; min-width:0;">
         <strong>Quick Buttons — Database Update Required</strong><br>
         <span style="opacity:0.9;font-size:13px;">
             Schema version <strong>' . htmlspecialchars($from ?: 'none') . '</strong>
@@ -104,6 +109,7 @@ class QuickButtonsPlugin extends Plugin {
         font-weight: 700;
         cursor: pointer;
         white-space: nowrap;
+        flex-shrink: 0;
         box-shadow: 0 1px 4px rgba(0,0,0,0.2);
     ">&#x2B06; Upgrade Now</button>
 </div>
@@ -161,8 +167,8 @@ var QAUpgrade = {
 };
 </script>';
 
-        // Inject after the opening of the main content area
-        $pos = strpos($buffer, 'id="pjax-container"');
+        // Inject right after <body> so it sits above all page content
+        $pos = strpos($buffer, '<body');
         if ($pos !== false) {
             $insertPos = strpos($buffer, '>', $pos);
             if ($insertPos !== false)
