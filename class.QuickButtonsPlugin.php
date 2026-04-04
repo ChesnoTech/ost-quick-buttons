@@ -3,7 +3,7 @@
  * Quick Buttons Plugin - Main Class
  *
  * @author  ChesnoTech
- * @version 4.1.1
+ * @version 4.2.0
  */
 
 require_once 'config.php';
@@ -11,7 +11,8 @@ require_once 'config.php';
 class QuickButtonsPlugin extends Plugin {
     var $config_class = 'QuickButtonsConfig';
 
-    const CURRENT_SCHEMA = '4.1.1';
+    const CURRENT_SCHEMA = '4.2.0';
+    const GITHUB_REPO = 'ChesnoTech/ost-quick-buttons';
 
     static private $bootstrapped = false;
 
@@ -310,6 +311,166 @@ var QAUpgrade = {
     }
 
     // ================================================================
+    //  Auto-Update from GitHub
+    // ================================================================
+
+    /**
+     * Fetch remote plugin.php from GitHub and compare versions.
+     */
+    static function checkForUpdate() {
+        $localVersion = self::CURRENT_SCHEMA;
+        $url = 'https://raw.githubusercontent.com/' . self::GITHUB_REPO . '/master/plugin.php';
+
+        $content = self::httpGet($url);
+        if (!$content)
+            return array('error' => 'Cannot reach GitHub. Check server internet connectivity.');
+
+        if (preg_match("/'version'\s*=>\s*'([^']+)'/", $content, $m)) {
+            $remoteVersion = $m[1];
+            return array(
+                'current'   => $localVersion,
+                'latest'    => $remoteVersion,
+                'available' => version_compare($remoteVersion, $localVersion, '>'),
+            );
+        }
+        return array('error' => 'Cannot parse remote version');
+    }
+
+    /**
+     * Download latest zip from GitHub, backup current files, replace, and run upgrade.
+     */
+    static function applyUpdate() {
+        $check = self::checkForUpdate();
+        if (isset($check['error']))
+            return array('success' => false, 'error' => $check['error']);
+        if (empty($check['available']))
+            return array('success' => false, 'error' => 'Already up to date');
+
+        $latestVersion = $check['latest'];
+        $pluginDir = dirname(__FILE__);
+
+        // 1. Backup current files
+        $backupOk = self::backupFiles(self::CURRENT_SCHEMA, $latestVersion);
+        if (!$backupOk)
+            return array('success' => false, 'error' => 'File backup failed. Check backups/ directory permissions.');
+
+        // 2. Download zip from GitHub
+        $zipUrl = 'https://github.com/' . self::GITHUB_REPO . '/archive/refs/heads/master.zip';
+        $zipContent = self::httpGet($zipUrl);
+        if (!$zipContent)
+            return array('success' => false, 'error' => 'Failed to download update from GitHub.');
+
+        $tmpFile = tempnam(sys_get_temp_dir(), 'qb_update_');
+        file_put_contents($tmpFile, $zipContent);
+
+        // 3. Extract zip
+        if (!class_exists('ZipArchive'))
+            return array('success' => false, 'error' => 'ZipArchive PHP extension required.');
+
+        $zip = new \ZipArchive();
+        if ($zip->open($tmpFile) !== true) {
+            @unlink($tmpFile);
+            return array('success' => false, 'error' => 'Cannot open downloaded zip.');
+        }
+
+        $tmpDir = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'qb_update_' . uniqid();
+        @mkdir($tmpDir, 0755, true);
+        $zip->extractTo($tmpDir);
+        $zip->close();
+        @unlink($tmpFile);
+
+        // 4. Find extracted directory (GitHub adds repo-branch prefix)
+        $dirs = glob($tmpDir . DIRECTORY_SEPARATOR . '*', GLOB_ONLYDIR);
+        if (!$dirs) {
+            self::recursiveDelete($tmpDir);
+            return array('success' => false, 'error' => 'Invalid archive structure.');
+        }
+        $sourceDir = $dirs[0];
+
+        // 5. Copy new files over current plugin directory
+        $copyOk = self::recursiveCopy($sourceDir, $pluginDir);
+        self::recursiveDelete($tmpDir);
+
+        if (!$copyOk)
+            return array('success' => false, 'error' => 'Failed to copy updated files. Check directory permissions.');
+
+        return array('success' => true, 'version' => $latestVersion);
+    }
+
+    /**
+     * HTTP GET with cURL fallback.
+     */
+    private static function httpGet($url) {
+        // Try file_get_contents first
+        $ctx = @stream_context_create(array('http' => array(
+            'timeout'       => 15,
+            'follow_location' => 1,
+            'user_agent'    => 'osTicket-QuickButtons/' . self::CURRENT_SCHEMA,
+        )));
+        $content = @file_get_contents($url, false, $ctx);
+        if ($content)
+            return $content;
+
+        // Fallback: cURL
+        if (function_exists('curl_init')) {
+            $ch = curl_init($url);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 15);
+            curl_setopt($ch, CURLOPT_FOLLOWLOCATION, true);
+            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+            curl_setopt($ch, CURLOPT_USERAGENT, 'osTicket-QuickButtons/' . self::CURRENT_SCHEMA);
+            $content = curl_exec($ch);
+            $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            curl_close($ch);
+            if ($content && $httpCode >= 200 && $httpCode < 400)
+                return $content;
+        }
+
+        return null;
+    }
+
+    /**
+     * Recursively copy directory contents.
+     */
+    private static function recursiveCopy($src, $dst) {
+        $dir = opendir($src);
+        if (!$dir) return false;
+        if (!is_dir($dst))
+            @mkdir($dst, 0755, true);
+        $ok = true;
+        while (($file = readdir($dir)) !== false) {
+            if ($file === '.' || $file === '..' || $file === '.git' || $file === 'backups')
+                continue;
+            $srcPath = $src . DIRECTORY_SEPARATOR . $file;
+            $dstPath = $dst . DIRECTORY_SEPARATOR . $file;
+            if (is_dir($srcPath)) {
+                $ok = $ok && self::recursiveCopy($srcPath, $dstPath);
+            } else {
+                $ok = $ok && @copy($srcPath, $dstPath);
+            }
+        }
+        closedir($dir);
+        return $ok;
+    }
+
+    /**
+     * Recursively delete a directory.
+     */
+    private static function recursiveDelete($dir) {
+        if (!is_dir($dir)) return;
+        $items = scandir($dir);
+        foreach ($items as $item) {
+            if ($item === '.' || $item === '..') continue;
+            $path = $dir . DIRECTORY_SEPARATOR . $item;
+            if (is_dir($path))
+                self::recursiveDelete($path);
+            else
+                @unlink($path);
+        }
+        @rmdir($dir);
+    }
+
+    // ================================================================
     //  Migrations
     // ================================================================
 
@@ -384,6 +545,8 @@ var QAUpgrade = {
                 url_post('^execute$', 'execute'),
                 url_post('^undo$', 'undo'),
                 url_post('^upgrade$', 'executeUpgradeAjax'),
+                url_get('^check-update$', 'checkForUpdate'),
+                url_post('^apply-update$', 'applyUpdate'),
                 url_get('^dashboard$', 'dashboard'),
                 url_get('^dashboard-page$', 'serveDashboardPage'),
                 url_get('^agent-perf-page$', 'serveAgentPerfPage'),

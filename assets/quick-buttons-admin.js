@@ -627,6 +627,177 @@
     }
 
     // ================================================================
+    //  Updates Tab
+    // ================================================================
+
+    function initUpdatesTab() {
+        var isPluginPage = $('a[href="#instances"]').length > 0;
+        var isInstancePage = $('input[type="text"], textarea').filter(function() {
+            var $f = $(this).closest('.form-field');
+            return $f.length && $f.text().indexOf('Widget Configuration') > -1;
+        }).length > 0;
+
+        if (!isPluginPage || isInstancePage) return;
+        if ($('.qa-updates-tab').length) return;
+
+        var $tabList = $('#plugin-tabs');
+        if (!$tabList.length) $tabList = $('ul.tabs, .tab_nav ul').first();
+        if (!$tabList.length) return;
+
+        $tabList.append('<li><a href="#updates">Updates</a></li>');
+
+        var $container = $(
+            '<div id="updates" class="tab_content qa-updates-tab" ' +
+            'style="display:none;padding:15px;"></div>'
+        );
+
+        var $tabContainer = $('#plugin-tabs_container');
+        if ($tabContainer.length)
+            $tabContainer.append($container);
+        else
+            $tabList.after($container);
+
+        $tabList.on('click', 'a[href="#updates"]', function(e) {
+            e.preventDefault();
+            $tabList.find('li').removeClass('active');
+            $(this).parent().addClass('active');
+            $container.siblings('.tab_content').hide();
+            $container.show();
+            renderUpdatesUI($container);
+        });
+    }
+
+    function renderUpdatesUI($container) {
+        $container.html(
+            '<div class="qa-update-card">' +
+                '<div class="qa-update-header">' +
+                    '<span class="qa-update-icon">&#x1F504;</span>' +
+                    '<h3>Plugin Updates</h3>' +
+                '</div>' +
+                '<div class="qa-update-body">' +
+                    '<p class="qa-update-status">Click below to check for updates from GitHub.</p>' +
+                    '<div class="qa-update-info" style="display:none;"></div>' +
+                    '<div class="qa-update-actions">' +
+                        '<button class="qa-update-btn qa-check-btn">Check for Updates</button>' +
+                    '</div>' +
+                '</div>' +
+            '</div>'
+        );
+
+        $container.find('.qa-check-btn').on('click', function() {
+            checkForUpdates($container);
+        });
+    }
+
+    function checkForUpdates($container) {
+        var $status = $container.find('.qa-update-status');
+        var $info = $container.find('.qa-update-info');
+        var $actions = $container.find('.qa-update-actions');
+        var $btn = $container.find('.qa-check-btn');
+
+        $btn.prop('disabled', true).text('Checking...');
+        $status.text('Connecting to GitHub...');
+        $info.hide();
+
+        $.ajax({
+            url: 'ajax.php/quick-buttons/check-update',
+            type: 'GET',
+            dataType: 'json',
+            success: function(data) {
+                if (data.error) {
+                    $status.html('<span class="qa-update-error">' + escHtml(data.error) + '</span>');
+                    $btn.prop('disabled', false).text('Retry');
+                    return;
+                }
+
+                $info.show().html(
+                    '<table class="qa-update-table">' +
+                    '<tr><td>Installed Version</td><td><strong>' + escHtml(data.current) + '</strong></td></tr>' +
+                    '<tr><td>Latest Version</td><td><strong>' + escHtml(data.latest) + '</strong></td></tr>' +
+                    '</table>'
+                );
+
+                if (data.available) {
+                    $status.html('<span class="qa-update-available">Update available!</span>');
+                    $actions.html(
+                        '<button class="qa-update-btn qa-apply-btn">Update to ' + escHtml(data.latest) + '</button>' +
+                        '<button class="qa-update-btn qa-check-btn" style="margin-left:8px;">Re-check</button>'
+                    );
+                    $actions.find('.qa-apply-btn').on('click', function() {
+                        applyUpdate($container, data.latest);
+                    });
+                    $actions.find('.qa-check-btn').on('click', function() {
+                        checkForUpdates($container);
+                    });
+                } else {
+                    $status.html('<span class="qa-update-current">You are running the latest version.</span>');
+                    $btn.prop('disabled', false).text('Check Again');
+                }
+            },
+            error: function(xhr) {
+                $status.html('<span class="qa-update-error">Failed to check for updates.</span>');
+                $btn.prop('disabled', false).text('Retry');
+            }
+        });
+    }
+
+    function applyUpdate($container, version) {
+        var $status = $container.find('.qa-update-status');
+        var $actions = $container.find('.qa-update-actions');
+        var $btn = $actions.find('.qa-apply-btn');
+
+        if (!confirm('This will:\n\n1. Backup current plugin files\n2. Download latest version from GitHub\n3. Replace plugin files\n\nProceed with update to v' + version + '?'))
+            return;
+
+        $btn.prop('disabled', true).text('Updating...');
+        $status.text('Downloading and installing update...');
+
+        var csrfToken = $('meta[name="csrf_token"]').attr('content')
+            || $('input[name="__CSRFToken__"]').val() || '';
+
+        $.ajax({
+            url: 'ajax.php/quick-buttons/apply-update',
+            type: 'POST',
+            dataType: 'json',
+            headers: { 'X-CSRFToken': csrfToken },
+            data: { __CSRFToken__: csrfToken },
+            success: function(data) {
+                if (data.success) {
+                    $container.find('.qa-update-card').addClass('qa-update-success');
+                    $status.html('<span class="qa-update-current">Updated to v' + escHtml(data.version) + '!</span>');
+                    $container.find('.qa-update-info').show().html(
+                        '<table class="qa-update-table">' +
+                        '<tr><td>New Version</td><td><strong>' + escHtml(data.version) + '</strong></td></tr>' +
+                        '<tr><td>Status</td><td><strong>Files updated</strong></td></tr>' +
+                        '</table>' +
+                        '<p class="qa-update-note">Reload the page to activate the new version. ' +
+                        'If a database migration is needed, an upgrade banner will appear.</p>'
+                    );
+                    $actions.html(
+                        '<button class="qa-update-btn qa-reload-btn" onclick="window.location.reload()">Reload Page</button>'
+                    );
+                } else {
+                    $status.html('<span class="qa-update-error">' + escHtml(data.error || 'Unknown error') + '</span>');
+                    $btn.prop('disabled', false).text('Retry Update');
+                }
+            },
+            error: function(xhr) {
+                var msg = 'Update failed.';
+                try { msg = JSON.parse(xhr.responseText).error || msg; } catch(e) {}
+                $status.html('<span class="qa-update-error">' + escHtml(msg) + '</span>');
+                $btn.prop('disabled', false).text('Retry Update');
+            }
+        });
+    }
+
+    function escHtml(str) {
+        if (!str) return '';
+        var d = document.createElement('div');
+        d.textContent = str;
+        return d.innerHTML;
+    }
+
+    // ================================================================
     //  Bootstrap
     // ================================================================
 
@@ -634,6 +805,7 @@
         initWidgetConfig();
         initDashboard();
         initDeptStatusMap();
+        initUpdatesTab();
     });
 
     $(document).on('pjax:end', function() {

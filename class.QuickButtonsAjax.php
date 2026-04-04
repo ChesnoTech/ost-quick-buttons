@@ -1547,6 +1547,28 @@ class QuickButtonsAjax extends AjaxController {
     //  Plugin Upgrade (admin-confirmed)
     // ================================================================
 
+    function checkForUpdate() {
+        $this->requireStaff();
+        global $thisstaff;
+        if (!$thisstaff || !$thisstaff->isAdmin())
+            Http::response(403, $this->json_encode(array('error' => __('Admin access required'))));
+
+        require_once dirname(__FILE__) . '/class.QuickButtonsPlugin.php';
+        $result = QuickButtonsPlugin::checkForUpdate();
+        return $this->json_encode($result);
+    }
+
+    function applyUpdate() {
+        $this->requireStaff();
+        global $thisstaff;
+        if (!$thisstaff || !$thisstaff->isAdmin())
+            Http::response(403, $this->json_encode(array('error' => __('Admin access required'))));
+
+        require_once dirname(__FILE__) . '/class.QuickButtonsPlugin.php';
+        $result = QuickButtonsPlugin::applyUpdate();
+        return $this->json_encode($result);
+    }
+
     function executeUpgradeAjax() {
         $this->requireStaff();
         global $thisstaff;
