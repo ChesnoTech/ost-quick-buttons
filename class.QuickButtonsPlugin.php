@@ -3,7 +3,7 @@
  * Quick Buttons Plugin - Main Class
  *
  * @author  ChesnoTech
- * @version 4.1.0
+ * @version 4.1.1
  */
 
 require_once 'config.php';
@@ -11,7 +11,7 @@ require_once 'config.php';
 class QuickButtonsPlugin extends Plugin {
     var $config_class = 'QuickButtonsConfig';
 
-    const CURRENT_SCHEMA = '4.1.0';
+    const CURRENT_SCHEMA = '4.1.1';
 
     static private $bootstrapped = false;
 
