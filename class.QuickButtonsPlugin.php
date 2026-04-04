@@ -3,7 +3,7 @@
  * Quick Buttons Plugin - Main Class
  *
  * @author  ChesnoTech
- * @version 4.3.0-RC.1
+ * @version 4.3.0
  */
 
 require_once 'config.php';
@@ -11,7 +11,7 @@ require_once 'config.php';
 class QuickButtonsPlugin extends Plugin {
     var $config_class = 'QuickButtonsConfig';
 
-    const CURRENT_SCHEMA = '4.3.0-RC.1';
+    const CURRENT_SCHEMA = '4.3.0';
     const GITHUB_REPO = 'ChesnoTech/ost-quick-buttons';
     const GITHUB_BRANCH = 'stable';
 
