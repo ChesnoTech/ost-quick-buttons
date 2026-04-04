@@ -3,7 +3,7 @@
  * Quick Buttons Plugin - Main Class
  *
  * @author  ChesnoTech
- * @version 4.2.0
+ * @version 4.3.0-dev
  */
 
 require_once 'config.php';
@@ -11,8 +11,9 @@ require_once 'config.php';
 class QuickButtonsPlugin extends Plugin {
     var $config_class = 'QuickButtonsConfig';
 
-    const CURRENT_SCHEMA = '4.2.0';
+    const CURRENT_SCHEMA = '4.3.0-dev';
     const GITHUB_REPO = 'ChesnoTech/ost-quick-buttons';
+    const GITHUB_BRANCH = 'stable';
 
     static private $bootstrapped = false;
 
@@ -319,7 +320,7 @@ var QAUpgrade = {
      */
     static function checkForUpdate() {
         $localVersion = self::CURRENT_SCHEMA;
-        $url = 'https://raw.githubusercontent.com/' . self::GITHUB_REPO . '/master/plugin.php';
+        $url = 'https://raw.githubusercontent.com/' . self::GITHUB_REPO . '/' . self::GITHUB_BRANCH . '/plugin.php';
 
         $content = self::httpGet($url);
         if (!$content)
@@ -355,7 +356,7 @@ var QAUpgrade = {
             return array('success' => false, 'error' => 'File backup failed. Check backups/ directory permissions.');
 
         // 2. Download zip from GitHub
-        $zipUrl = 'https://github.com/' . self::GITHUB_REPO . '/archive/refs/heads/master.zip';
+        $zipUrl = 'https://github.com/' . self::GITHUB_REPO . '/archive/refs/heads/' . self::GITHUB_BRANCH . '.zip';
         $zipContent = self::httpGet($zipUrl);
         if (!$zipContent)
             return array('success' => false, 'error' => 'Failed to download update from GitHub.');
