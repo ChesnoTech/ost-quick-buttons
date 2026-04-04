@@ -238,7 +238,7 @@ class QuickButtonsAjax extends AjaxController {
             'enabledCount'      => __('%d / %d enabled'),
 
             // Steps
-            'stepN'             => __('Step %d'),
+            'stepN'             => __('Step %n'),
             'addStep'           => __('Add Step'),
             'removeStep'        => __('Remove'),
             'moveUp'            => __('Move Up'),

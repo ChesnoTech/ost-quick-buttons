@@ -193,7 +193,8 @@
                         'data-ticket-id': ticketId,
                         'data-confirm-mode': resolved.confirmMode,
                         'data-countdown': resolved.countdownSeconds,
-                        'title': label
+                        'title': label,
+                        'data-label': label
                     })
                     .css('background-color', color)
                     .html(QA.renderIcon(icon));
@@ -414,8 +415,19 @@
                     .html(QA.renderIcon(QA.STOP_ICON) + ' <span>' + QA.escapeHtml(QA.i18n.bulkStop) + '</span>')
             );
 
-            // Insert after the queue toolbar
-            $('form#tickets .sticky.bar, form#tickets table.sticky-header').first().after($toolbar);
+            // Insert after the queue toolbar (handle both stock osTicket and osTicketAwesome themes)
+            var $anchor = $('form#tickets .sticky.bar, form#tickets table.sticky-header').first();
+            if (!$anchor.length) {
+                // osTicketAwesome: sticky bar is outside form#tickets
+                $anchor = $('form#tickets').prev('.sticky.bar, .sticky-header');
+            }
+            if (!$anchor.length) {
+                // Fallback: prepend to form#tickets
+                $anchor = $('form#tickets');
+                $anchor.prepend($toolbar);
+            } else {
+                $anchor.after($toolbar);
+            }
 
             // Show/hide based on checkbox selection
             $('form#tickets').on('change', 'input.ckb', function() {
@@ -574,7 +586,7 @@
             var ticketNum = $row.find('a[href*="tickets.php"]').first().text().trim() || ticketId;
 
             if (confirmMode === 'confirm') {
-                var stepLabel = $btn.attr('title') || ('Step ' + (stepIndex + 1));
+                var stepLabel = $btn.attr('data-label') || $btn.attr('title') || ('Step ' + (stepIndex + 1));
                 var template = QA.i18n.confirmStep || 'Execute "%s" on ticket #%s?';
                 var message = template.replace('%s', stepLabel).replace('%s', ticketNum);
 
