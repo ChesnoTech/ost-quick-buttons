@@ -119,72 +119,112 @@ class QuickButtonsConfig extends PluginConfig {
             if (empty($deptCfg['enabled']))
                 continue;
 
-            $variant = $deptCfg['variant'] ?? 'single';
+            // Normalize legacy format before validating
+            $deptCfg = QuickButtonsPlugin::normalizeDeptConfig($deptCfg);
+            $steps = $deptCfg['steps'] ?? array();
 
-            // Required for all variants: trigger and target statuses
-            // stop_target_status is only used in single-step (two-step uses step2_stop_target_status)
-            $requiredFields = array('start_trigger_status', 'start_target_status');
-            if ($variant !== 'twostep')
-                $requiredFields[] = 'stop_target_status';
-            foreach ($requiredFields as $field) {
-                if (empty($deptCfg[$field])) {
-                    $errors['err'] = sprintf(
-                        __('Department %s: %s is required'),
-                        $deptId, $field);
-                    return false;
-                }
-                if (!TicketStatus::lookup($deptCfg[$field])) {
-                    $errors['err'] = sprintf(
-                        __('Department %s: Status ID %s not found'),
-                        $deptId, $deptCfg[$field]);
-                    return false;
-                }
+            // Must have at least 1 step
+            if (empty($steps)) {
+                $errors['err'] = sprintf(
+                    __('Department %s: At least one step is required'),
+                    $deptId);
+                return false;
             }
 
-            // Two-step variant: validate additional status fields
-            if ($variant === 'twostep') {
-                foreach (array('step2_trigger_status', 'step2_target_status', 'step2_stop_target_status') as $field) {
-                    if (empty($deptCfg[$field])) {
+            // Max 10 steps
+            if (count($steps) > 10) {
+                $errors['err'] = sprintf(
+                    __('Department %s: Maximum 10 steps allowed'),
+                    $deptId);
+                return false;
+            }
+
+            $triggersSeen = array();
+            foreach ($steps as $idx => $step) {
+                $stepNum = $idx + 1;
+
+                // Required: trigger_status and target_status
+                if (empty($step['trigger_status'])) {
+                    $errors['err'] = sprintf(
+                        __('Department %s, Step %d: Trigger status is required'),
+                        $deptId, $stepNum);
+                    return false;
+                }
+                if (empty($step['target_status'])) {
+                    $errors['err'] = sprintf(
+                        __('Department %s, Step %d: Target status is required'),
+                        $deptId, $stepNum);
+                    return false;
+                }
+
+                // Validate status IDs exist
+                if (!TicketStatus::lookup($step['trigger_status'])) {
+                    $errors['err'] = sprintf(
+                        __('Department %s, Step %d: Trigger status ID %s not found'),
+                        $deptId, $stepNum, $step['trigger_status']);
+                    return false;
+                }
+                if (!TicketStatus::lookup($step['target_status'])) {
+                    $errors['err'] = sprintf(
+                        __('Department %s, Step %d: Target status ID %s not found'),
+                        $deptId, $stepNum, $step['target_status']);
+                    return false;
+                }
+
+                // Trigger != target (no-op check)
+                if ((string)$step['trigger_status'] === (string)$step['target_status']) {
+                    $errors['err'] = sprintf(
+                        __('Department %s, Step %d: Trigger and target status are the same'),
+                        $deptId, $stepNum);
+                    return false;
+                }
+
+                // No duplicate triggers within a department
+                $triggerKey = (string)$step['trigger_status'];
+                if (isset($triggersSeen[$triggerKey])) {
+                    $errors['err'] = sprintf(
+                        __('Department %s: Duplicate trigger status in steps %d and %d'),
+                        $deptId, $triggersSeen[$triggerKey], $stepNum);
+                    return false;
+                }
+                $triggersSeen[$triggerKey] = $stepNum;
+
+                // Behavior validation
+                if (!empty($step['behavior'])
+                        && !in_array($step['behavior'], array('claim', 'release', 'none'))) {
+                    $errors['err'] = sprintf(
+                        __('Department %s, Step %d: Invalid behavior "%s"'),
+                        $deptId, $stepNum, $step['behavior']);
+                    return false;
+                }
+
+                // Transfer dept exists (if set)
+                if (!empty($step['transfer_dept'])) {
+                    if (!Dept::lookup($step['transfer_dept'])) {
                         $errors['err'] = sprintf(
-                            __('Department %s: %s is required for two-step variant'),
-                            $deptId, $field);
+                            __('Department %s, Step %d: Transfer department not found'),
+                            $deptId, $stepNum);
                         return false;
                     }
-                    if (!TicketStatus::lookup($deptCfg[$field])) {
-                        $errors['err'] = sprintf(
-                            __('Department %s: Status ID %s not found'),
-                            $deptId, $deptCfg[$field]);
-                        return false;
-                    }
                 }
 
-                // Validate no loops: final done != trigger
-                if ($deptCfg['step2_stop_target_status'] === $deptCfg['start_trigger_status']) {
+                // Label length
+                if (!empty($step['label']) && mb_strlen($step['label']) > 12) {
                     $errors['err'] = sprintf(
-                        __('Department %s: Final done status cannot equal trigger (creates loop)'),
-                        $deptId);
+                        __('Department %s, Step %d: Label exceeds 12 characters'),
+                        $deptId, $stepNum);
                     return false;
                 }
             }
 
-            // Transfer dept is optional (empty = no transfer)
-            if (!empty($deptCfg['stop_transfer_dept'])) {
-                if (!Dept::lookup($deptCfg['stop_transfer_dept'])) {
-                    $errors['err'] = sprintf(
-                        __('Department %s: Transfer department not found'),
-                        $deptId);
-                    return false;
-                }
-            }
-
-            // Validate label lengths (max 12 chars)
-            foreach (array('start_label', 'stop_label', 'partial_label', 'start2_label', 'finish_label') as $labelField) {
-                if (!empty($deptCfg[$labelField]) && mb_strlen($deptCfg[$labelField]) > 12) {
-                    $errors['err'] = sprintf(
-                        __('Department %s: Button label "%s" exceeds 12 characters'),
-                        $deptId, $labelField);
-                    return false;
-                }
+            // Loop detection: last step's target != first step's trigger
+            $firstTrigger = (string)$steps[0]['trigger_status'];
+            $lastTarget = (string)$steps[count($steps) - 1]['target_status'];
+            if ($firstTrigger === $lastTarget) {
+                $errors['err'] = sprintf(
+                    __('Department %s: Final target status equals initial trigger (creates loop)'),
+                    $deptId);
+                return false;
             }
         }
 

@@ -1,6 +1,6 @@
 /**
- * Workflow Builder — Admin UI v3.0
- * Card-based department configuration with status flow diagrams
+ * Workflow Builder — Admin UI v5.0
+ * Card-based department configuration with dynamic N-step workflows
  */
 
 /* Reset & base */
@@ -247,7 +247,7 @@ body {
 
 @keyframes wb-slideDown {
     from { opacity: 0; max-height: 0; }
-    to   { opacity: 1; max-height: 300px; }
+    to   { opacity: 1; max-height: 2000px; }
 }
 
 /* ================================================================
@@ -549,36 +549,101 @@ body {
     .wb-footer-info { color: #666; }
     .wb-flow-label { color: #666; }
     .wb-transfer { border-color: #333; }
-    .wb-variant-row { background: #2a2a2a; border-color: #333; }
-    .wb-sel-variant { background: #333; border-color: #444; color: #ddd; }
-    .wb-flow-step-label { color: #666; }
-    .wb-labels-row { border-color: #333; }
-    .wb-label-input { background: #2a2a2a; border-color: #444; color: #ddd; }
-    .wb-pill-step2-trigger select { background-color: #3a2a10; border-color: #b87820; color: #e8a030; }
-    .wb-pill-step2-working select { background-color: #3a2a10; border-color: #8a6a20; color: #d4a820; }
-    .wb-pill-final-done select { background-color: #1a3a2a; border-color: #2a7a4a; color: #5ac87a; }
 }
 
 /* ================================================================
-   Variant selector & two-step flow
+   Dynamic Step Rows
    ================================================================ */
 
-.wb-variant-row {
+.wb-steps-container {
     display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 8px 16px;
-    background: #f8f9fa;
-    border-bottom: 1px solid #eee;
-    font-size: 13px;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 12px;
 }
 
-.wb-variant-label {
-    font-weight: 600;
+.wb-step-row {
+    border: 1px solid #e8e8e8;
+    border-radius: 8px;
+    padding: 12px 16px;
+    background: #fafbfc;
+    transition: border-color 0.2s;
+}
+
+.wb-step-row:hover {
+    border-color: #ccc;
+}
+
+.wb-step-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+}
+
+.wb-step-number {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: #999;
+}
+
+.wb-step-actions {
+    display: flex;
+    gap: 4px;
+}
+
+.wb-step-action-btn {
+    padding: 2px 8px;
+    border: 1px solid #ddd;
+    border-radius: 3px;
+    background: #fff;
+    color: #888;
+    font-size: 11px;
+    cursor: pointer;
+    transition: all 0.15s;
+    line-height: 1.4;
+}
+
+.wb-step-action-btn:hover {
+    background: #f0f7fc;
+    border-color: #128DBE;
+    color: #128DBE;
+}
+
+.wb-step-action-btn:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+}
+
+.wb-step-action-btn.wb-step-remove-btn:hover {
+    background: #fef0f0;
+    border-color: #e74c3c;
+    color: #e74c3c;
+}
+
+/* Step config row: behavior, transfer, label */
+.wb-step-config {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid #f0f0f0;
+}
+
+.wb-step-config-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 12px;
     color: #666;
 }
 
-.wb-sel-variant {
+.wb-step-config-item select,
+.wb-step-config-item input[type="text"] {
     padding: 4px 8px;
     border: 1px solid #ddd;
     border-radius: 4px;
@@ -586,69 +651,76 @@ body {
     background: #fff;
 }
 
-.wb-flow-section {
-    margin-bottom: 4px;
+.wb-step-config-item select:focus,
+.wb-step-config-item input[type="text"]:focus {
+    border-color: #128DBE;
+    outline: none;
 }
 
-.wb-flow-step-label {
-    font-size: 10px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    color: #999;
-    padding: 8px 16px 2px;
+.wb-step-config-item .wb-lbl-step {
+    width: 80px;
 }
 
-.wb-labels-row {
-    display: flex;
-    gap: 8px;
-    padding: 4px 16px 8px;
-    border-bottom: 1px solid #f0f0f0;
-}
-
-.wb-label-input {
-    width: 90px;
-    padding: 3px 6px;
-    border: 1px solid #ddd;
-    border-radius: 3px;
-    font-size: 11px;
-    color: #666;
-}
-
-.wb-label-input::placeholder {
+.wb-step-config-item .wb-lbl-step::placeholder {
     color: #bbb;
     font-style: italic;
 }
 
-/* Step 2 pill colors */
-.wb-pill-step2-trigger {
-    border-bottom: 3px solid #e67e22;
-}
-.wb-pill-step2-trigger select {
-    background-color: #fdf2e9;
-    border-color: #e67e22;
-    color: #a85c14;
-}
-
-.wb-pill-step2-working {
-    border-bottom: 3px solid #d4a820;
-}
-
-.wb-pill-final-done {
-    border-bottom: 3px solid #27ae60;
-}
-.wb-pill-final-done select {
-    background-color: #eafaf1;
-    border-color: #27ae60;
-    color: #1a7a42;
+/* Add Step button */
+.wb-step-add-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 8px 16px;
+    margin-top: 4px;
+    border: 2px dashed #ccc;
+    border-radius: 8px;
+    background: transparent;
+    color: #999;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s;
 }
 
-/* Partial arrow (orange) */
-.wb-flow-arrow-partial {
-    color: #e67e22;
+.wb-step-add-btn:hover {
+    border-color: #128DBE;
+    color: #128DBE;
+    background: #f0f7fc;
 }
 
-/* Start2 arrow */
-.wb-flow-arrow-start2 {
-    color: #2980b9;
+.wb-step-add-btn:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+}
+
+/* Behavior-based arrow colors */
+.wb-flow-arrow-claim   { color: #128DBE; }
+.wb-flow-arrow-release { color: #27ae60; }
+.wb-flow-arrow-none    { color: #e67e22; }
+
+/* Target pill varies by behavior */
+.wb-pill-target-claim select  { background-color: #fef3e2; border-color: #f5d89e; color: #b87a00; }
+.wb-pill-target-release select { background-color: #e7f8ee; border-color: #a3e4b8; color: #1a7a3a; }
+.wb-pill-target-none select   { background-color: #fef3e2; border-color: #f5d89e; color: #b87a00; }
+
+/* ================================================================
+   Dark mode — step rows
+   ================================================================ */
+@media (prefers-color-scheme: dark) {
+    .wb-step-row { background: #2a2a2a; border-color: #3a3a3a; }
+    .wb-step-row:hover { border-color: #555; }
+    .wb-step-number { color: #777; }
+    .wb-step-action-btn { background: #333; border-color: #444; color: #888; }
+    .wb-step-config { border-color: #3a3a3a; }
+    .wb-step-config-item { color: #888; }
+    .wb-step-config-item select, .wb-step-config-item input[type="text"] {
+        background: #333; border-color: #444; color: #ddd;
+    }
+    .wb-step-add-btn { border-color: #444; color: #666; }
+    .wb-step-add-btn:hover { border-color: #128DBE; color: #128DBE; background: #1a2a3a; }
+    .wb-pill-target-claim select { background-color: #3a2a10; border-color: #8a6a20; color: #d4a820; }
+    .wb-pill-target-release select { background-color: #1a3a2a; border-color: #2a7a4a; color: #5ac87a; }
+    .wb-pill-target-none select { background-color: #3a2a10; border-color: #8a6a20; color: #d4a820; }
 }

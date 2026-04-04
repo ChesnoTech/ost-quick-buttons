@@ -484,6 +484,8 @@ var QAUpgrade = {
         self::migrate_410_showDeadline();
         // v4.1.0: Update stop icon from stacked to emoji checkmark
         self::migrate_410_stopIcon();
+        // v5.0.0: Convert flat variant configs to dynamic steps arrays
+        self::migrate_500_dynamicSteps();
     }
 
     private static function migrate_410_showDeadline() {
@@ -511,6 +513,133 @@ var QAUpgrade = {
             WHERE `key` = 'button_icon'
               AND value LIKE '%icon-check+icon-share%'
               AND namespace LIKE 'plugin.%.instance.%'");
+    }
+
+    /**
+     * v5.0.0: Convert flat single/twostep variant configs to dynamic steps arrays.
+     * Reads each instance's widget_config, converts legacy dept configs, writes back.
+     */
+    private static function migrate_500_dynamicSteps() {
+        $res = db_query("SELECT id, namespace, `key`, value FROM " . CONFIG_TABLE
+            . " WHERE `key` = 'widget_config'"
+            . "   AND namespace LIKE 'plugin.%.instance.%'");
+        if (!$res) return;
+
+        while ($row = db_fetch_array($res)) {
+            $raw = strip_tags($row['value'] ?: '');
+            $data = @json_decode($raw, true);
+            if (!is_array($data) || empty($data['departments'])) continue;
+
+            $changed = false;
+            foreach ($data['departments'] as $deptId => &$deptCfg) {
+                if (!empty($deptCfg['schema_version']) && (int)$deptCfg['schema_version'] >= 2)
+                    continue; // Already migrated
+                if (isset($deptCfg['steps']))
+                    continue; // Already has steps
+
+                $deptCfg = self::normalizeDeptConfig($deptCfg);
+                $changed = true;
+            }
+            unset($deptCfg);
+
+            if ($changed) {
+                $json = json_encode($data, JSON_UNESCAPED_UNICODE);
+                db_query(sprintf(
+                    "UPDATE %s SET value = %s WHERE id = %d",
+                    CONFIG_TABLE, db_input($json), (int)$row['id']
+                ));
+            }
+        }
+    }
+
+    /**
+     * Convert a legacy flat department config to the v5.0 dynamic steps format.
+     * Safe to call on already-converted configs (returns as-is).
+     *
+     * @param array $deptCfg  Department config (from widget_config.departments[id])
+     * @return array  Normalized config with 'steps' array and 'schema_version' = 2
+     */
+    static function normalizeDeptConfig($deptCfg) {
+        // Already in v5 format
+        if (!empty($deptCfg['schema_version']) && (int)$deptCfg['schema_version'] >= 2)
+            return $deptCfg;
+        if (isset($deptCfg['steps']) && is_array($deptCfg['steps']))
+            return $deptCfg;
+
+        $variant = $deptCfg['variant'] ?? 'single';
+        $steps = array();
+
+        if ($variant === 'twostep') {
+            // 4-step: start -> partial -> start2 -> finish
+            $steps[] = array(
+                'trigger_status' => (string)($deptCfg['start_trigger_status'] ?? ''),
+                'target_status'  => (string)($deptCfg['start_target_status'] ?? ''),
+                'behavior'       => 'claim',
+                'transfer_dept'  => '',
+                'clear_team'     => false,
+                'label'          => $deptCfg['start_label'] ?? '',
+                'icon'           => '',
+                'color'          => '',
+            );
+            $steps[] = array(
+                'trigger_status' => (string)($deptCfg['start_target_status'] ?? ''),
+                'target_status'  => (string)($deptCfg['step2_trigger_status'] ?? ''),
+                'behavior'       => 'release',
+                'transfer_dept'  => '',
+                'clear_team'     => false,
+                'label'          => $deptCfg['partial_label'] ?? '',
+                'icon'           => '',
+                'color'          => '',
+            );
+            $steps[] = array(
+                'trigger_status' => (string)($deptCfg['step2_trigger_status'] ?? ''),
+                'target_status'  => (string)($deptCfg['step2_target_status'] ?? ''),
+                'behavior'       => 'claim',
+                'transfer_dept'  => '',
+                'clear_team'     => false,
+                'label'          => $deptCfg['start2_label'] ?? '',
+                'icon'           => '',
+                'color'          => '',
+            );
+            $steps[] = array(
+                'trigger_status' => (string)($deptCfg['step2_target_status'] ?? ''),
+                'target_status'  => (string)($deptCfg['step2_stop_target_status'] ?? ''),
+                'behavior'       => 'release',
+                'transfer_dept'  => (string)($deptCfg['stop_transfer_dept'] ?? ''),
+                'clear_team'     => !empty($deptCfg['step2_clear_team']),
+                'label'          => $deptCfg['finish_label'] ?? '',
+                'icon'           => '',
+                'color'          => '',
+            );
+        } else {
+            // 2-step: start -> stop
+            $steps[] = array(
+                'trigger_status' => (string)($deptCfg['start_trigger_status'] ?? ''),
+                'target_status'  => (string)($deptCfg['start_target_status'] ?? ''),
+                'behavior'       => 'claim',
+                'transfer_dept'  => '',
+                'clear_team'     => false,
+                'label'          => $deptCfg['start_label'] ?? '',
+                'icon'           => '',
+                'color'          => '',
+            );
+            $steps[] = array(
+                'trigger_status' => (string)($deptCfg['start_target_status'] ?? ''),
+                'target_status'  => (string)($deptCfg['stop_target_status'] ?? ''),
+                'behavior'       => 'release',
+                'transfer_dept'  => (string)($deptCfg['stop_transfer_dept'] ?? ''),
+                'clear_team'     => !empty($deptCfg['clear_team']),
+                'label'          => $deptCfg['stop_label'] ?? '',
+                'icon'           => '',
+                'color'          => '',
+            );
+        }
+
+        return array(
+            'enabled'        => !empty($deptCfg['enabled']),
+            'schema_version' => 2,
+            'steps'          => $steps,
+        );
     }
 
     // ================================================================

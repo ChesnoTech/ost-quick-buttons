@@ -1,6 +1,6 @@
 /**
- * Workflow Builder — Admin UI v3.0
- * Card-based department configuration with status flow diagrams
+ * Workflow Builder — Admin UI v5.0
+ * Card-based department configuration with dynamic N-step workflows
  * All user-facing strings sourced from D.i18n (server-side __() translations)
  */
 (function() {
@@ -10,6 +10,7 @@
     var T = D.i18n || {};  // Translations
     var existing = (D.config && D.config.departments) ? D.config.departments : {};
     var dirty = false;
+    var MAX_STEPS = 10;
 
     // ================================================================
     //  Helpers
@@ -85,6 +86,39 @@
         if (info) info.textContent = t('unsavedChanges');
     }
 
+    /** Resolve a status name by ID for display purposes */
+    function statusName(id) {
+        if (!id) return '';
+        for (var i = 0; i < D.statuses.length; i++) {
+            if (String(D.statuses[i].id) === String(id))
+                return D.statuses[i].name;
+        }
+        return '';
+    }
+
+    /** Arrow symbol based on behavior */
+    function behaviorArrow(behavior) {
+        switch (behavior) {
+            case 'claim':   return '\u25B6'; // right-pointing triangle
+            case 'release': return '\u2714'; // check mark
+            default:        return '\u2192'; // right arrow
+        }
+    }
+
+    /** Create a default blank step, optionally chaining from a previous step */
+    function defaultStep(prevStep) {
+        return {
+            trigger_status: prevStep ? (prevStep.target_status || '') : '',
+            target_status: '',
+            behavior: 'none',
+            transfer_dept: '',
+            clear_team: false,
+            label: '',
+            icon: '',
+            color: ''
+        };
+    }
+
     // ================================================================
     //  Render
     // ================================================================
@@ -130,105 +164,7 @@
 
         D.departments.forEach(function(dept) {
             var cfg = existing[dept.id] || {};
-            var enabled = !!cfg.enabled;
-
-            var card = document.createElement('div');
-            card.className = 'wb-card' + (enabled ? ' wb-card-enabled' : '');
-            card.dataset.deptId = dept.id;
-            card.dataset.deptName = dept.name.toLowerCase();
-
-            card.innerHTML =
-                '<div class="wb-card-header">' +
-                '<div class="wb-card-dot"></div>' +
-                '<div class="wb-card-name">' + esc(dept.name) + '</div>' +
-                '<label class="wb-toggle">' +
-                '<input type="checkbox" class="wb-enabled-cb"' + (enabled ? ' checked' : '') + '>' +
-                '<div class="wb-toggle-track"></div>' +
-                '</label>' +
-                '</div>' +
-                '<div class="wb-card-body">' +
-                // Variant selector
-                '<div class="wb-variant-row">' +
-                '<span class="wb-variant-label">' + esc(t('variant') || 'Variant') + ':</span>' +
-                '<select class="wb-sel-variant">' +
-                '<option value="single"' + ((cfg.variant || 'single') === 'single' ? ' selected' : '') + '>' + esc(t('variantSingle') || 'Single Step') + '</option>' +
-                '<option value="twostep"' + (cfg.variant === 'twostep' ? ' selected' : '') + '>' + esc(t('variantTwostep') || 'Two Step') + '</option>' +
-                '</select>' +
-                '</div>' +
-                // Step 1 flow (always shown)
-                '<div class="wb-flow-section">' +
-                '<div class="wb-flow-step-label">' + esc(t('step1') || 'Step 1') + '</div>' +
-                '<div class="wb-flow">' +
-                '<div class="wb-flow-pill wb-pill-trigger">' +
-                '<span class="wb-flow-label">' + esc(t('trigger')) + '</span>' +
-                '<select class="wb-sel-trigger">' + statusOptions(cfg.start_trigger_status || '') + '</select>' +
-                '</div>' +
-                '<div class="wb-flow-arrow wb-flow-arrow-start">\u25B6</div>' +
-                '<div class="wb-flow-pill wb-pill-working">' +
-                '<span class="wb-flow-label">' + esc(t('working')) + '</span>' +
-                '<select class="wb-sel-working">' + statusOptions(cfg.start_target_status || '') + '</select>' +
-                '</div>' +
-                // Single-step: show done pill inline
-                '<div class="wb-flow-arrow wb-flow-arrow-stop wb-single-only">\u2714</div>' +
-                '<div class="wb-flow-pill wb-pill-done wb-single-only">' +
-                '<span class="wb-flow-label">' + esc(t('done')) + '</span>' +
-                '<select class="wb-sel-done">' + statusOptions(cfg.stop_target_status || '') + '</select>' +
-                '</div>' +
-                // Two-step: show partial arrow
-                '<div class="wb-flow-arrow wb-flow-arrow-partial wb-twostep-only">\u23E9</div>' +
-                '</div>' +
-                // Labels row for step 1
-                '<div class="wb-labels-row">' +
-                '<input type="text" class="wb-label-input wb-lbl-start" maxlength="12" placeholder="' + esc(t('start') || 'Start') + '" value="' + esc(cfg.start_label || '') + '">' +
-                '<input type="text" class="wb-label-input wb-lbl-partial wb-twostep-only" maxlength="12" placeholder="' + esc(t('partialReady') || 'Next') + '" value="' + esc(cfg.partial_label || '') + '">' +
-                '<input type="text" class="wb-label-input wb-lbl-stop wb-single-only" maxlength="12" placeholder="' + esc(t('done') || 'Done') + '" value="' + esc(cfg.stop_label || '') + '">' +
-                '</div>' +
-                '</div>' +
-                // Step 2 flow (only for two-step)
-                '<div class="wb-flow-section wb-twostep-only">' +
-                '<div class="wb-flow-step-label">' + esc(t('step2') || 'Step 2') + '</div>' +
-                '<div class="wb-flow">' +
-                '<div class="wb-flow-pill wb-pill-step2-trigger">' +
-                '<span class="wb-flow-label">' + esc(t('step2Trigger') || 'Step 2 Trigger') + '</span>' +
-                '<select class="wb-sel-step2-trigger">' + statusOptions(cfg.step2_trigger_status || '') + '</select>' +
-                '</div>' +
-                '<div class="wb-flow-arrow wb-flow-arrow-start2">\u25B6</div>' +
-                '<div class="wb-flow-pill wb-pill-step2-working">' +
-                '<span class="wb-flow-label">' + esc(t('step2Working') || 'Step 2 Working') + '</span>' +
-                '<select class="wb-sel-step2-working">' + statusOptions(cfg.step2_target_status || '') + '</select>' +
-                '</div>' +
-                '<div class="wb-flow-arrow wb-flow-arrow-stop">\u2714</div>' +
-                '<div class="wb-flow-pill wb-pill-final-done">' +
-                '<span class="wb-flow-label">' + esc(t('finalDone') || 'Final Done') + '</span>' +
-                '<select class="wb-sel-final-done">' + statusOptions(cfg.step2_stop_target_status || '') + '</select>' +
-                '</div>' +
-                '</div>' +
-                // Labels row for step 2
-                '<div class="wb-labels-row">' +
-                '<input type="text" class="wb-label-input wb-lbl-start2" maxlength="12" placeholder="' + esc(t('startStep2') || 'Start') + '" value="' + esc(cfg.start2_label || '') + '">' +
-                '<input type="text" class="wb-label-input wb-lbl-finish" maxlength="12" placeholder="' + esc(t('done') || 'Done') + '" value="' + esc(cfg.finish_label || '') + '">' +
-                '</div>' +
-                '</div>' +
-                '<div class="wb-validation"></div>' +
-                '<div class="wb-transfer">' +
-                '<span class="wb-transfer-label">' + esc(t('transferTo')) + '</span>' +
-                '<select class="wb-sel-transfer">' + deptOptions(cfg.stop_transfer_dept || '') + '</select>' +
-                '<label class="wb-transfer-check">' +
-                '<input type="checkbox" class="wb-clear-team"' + (cfg.clear_team ? ' checked' : '') + '>' +
-                ' ' + esc(t('clearTeam')) +
-                '</label>' +
-                '</div>' +
-                '<div class="wb-card-actions">' +
-                '<button class="wb-card-action-btn wb-clone-btn" data-dept-id="' + dept.id + '">' + esc(t('copyTo')) + '</button>' +
-                '<select class="wb-card-action-btn wb-template-sel" data-dept-id="' + dept.id + '">' +
-                '<option value="">' + esc(t('applyTemplate')) + '</option>' +
-                '<option value="single">' + esc(t('tplSingleStep')) + '</option>' +
-                '<option value="twostep">' + esc(t('variantTwostep') || 'Two Step') + '</option>' +
-                '</select>' +
-                '</div>' +
-                '</div>';
-
-            cards.appendChild(card);
+            cards.appendChild(renderCard(dept, cfg));
         });
 
         app.appendChild(cards);
@@ -245,11 +181,206 @@
         app.appendChild(footer);
 
         bindEvents();
+    }
 
-        // Initialize variant visibility on all cards
-        document.querySelectorAll('.wb-card').forEach(function(card) {
-            updateVariantVisibility(card);
+    function renderCard(dept, cfg) {
+        var enabled = !!cfg.enabled;
+        var steps = (cfg.steps && cfg.steps.length) ? cfg.steps : [defaultStep()];
+
+        var card = document.createElement('div');
+        card.className = 'wb-card' + (enabled ? ' wb-card-enabled' : '');
+        card.dataset.deptId = dept.id;
+        card.dataset.deptName = dept.name.toLowerCase();
+
+        var html =
+            '<div class="wb-card-header">' +
+            '<div class="wb-card-dot"></div>' +
+            '<div class="wb-card-name">' + esc(dept.name) + '</div>' +
+            '<label class="wb-toggle">' +
+            '<input type="checkbox" class="wb-enabled-cb"' + (enabled ? ' checked' : '') + '>' +
+            '<div class="wb-toggle-track"></div>' +
+            '</label>' +
+            '</div>' +
+            '<div class="wb-card-body">';
+
+        // Steps container
+        html += '<div class="wb-steps-container">';
+        for (var i = 0; i < steps.length; i++) {
+            html += renderStepRow(steps[i], i, steps.length);
+        }
+        html += '</div>';
+
+        // Add Step button
+        var addDisabled = steps.length >= MAX_STEPS;
+        html += '<button class="wb-step-add-btn"' + (addDisabled ? ' disabled' : '') + '>' +
+            '+ ' + esc(t('addStep')) + '</button>';
+
+        // Validation area
+        html += '<div class="wb-validation"></div>';
+
+        // Card actions
+        html += '<div class="wb-card-actions">' +
+            '<button class="wb-card-action-btn wb-clone-btn" data-dept-id="' + dept.id + '">' + esc(t('copyTo')) + '</button>' +
+            '<select class="wb-card-action-btn wb-template-sel" data-dept-id="' + dept.id + '">' +
+            '<option value="">' + esc(t('applyTemplate')) + '</option>' +
+            '<option value="single">' + esc(t('tplSingleStep')) + '</option>' +
+            '<option value="twostep">' + esc(t('tplTwoStep')) + '</option>' +
+            '</select>' +
+            '</div>';
+
+        html += '</div>'; // .wb-card-body
+
+        card.innerHTML = html;
+        return card;
+    }
+
+    function renderStepRow(step, index, totalSteps) {
+        step = step || defaultStep();
+        var stepNum = index + 1;
+        var arrow = behaviorArrow(step.behavior || 'none');
+        var canRemove = totalSteps > 1;
+        var canMoveUp = index > 0;
+        var canMoveDown = index < totalSteps - 1;
+
+        var html = '<div class="wb-step-row" data-step-index="' + index + '">';
+
+        // Step header: number + action buttons
+        html += '<div class="wb-step-header">' +
+            '<span class="wb-step-number">' + esc(t('stepN', { n: stepNum })) + '</span>' +
+            '<div class="wb-step-actions">' +
+            '<button class="wb-step-move-btn wb-step-move-up" title="' + esc(t('moveUp')) + '"' +
+            (canMoveUp ? '' : ' disabled') + '>\u2191</button>' +
+            '<button class="wb-step-move-btn wb-step-move-down" title="' + esc(t('moveDown')) + '"' +
+            (canMoveDown ? '' : ' disabled') + '>\u2193</button>' +
+            '<button class="wb-step-remove-btn" title="' + esc(t('removeStep')) + '"' +
+            (canRemove ? '' : ' disabled') + '>\u2715</button>' +
+            '</div>' +
+            '</div>';
+
+        // Flow visualization: trigger pill -> arrow -> target pill
+        html += '<div class="wb-flow">' +
+            '<div class="wb-flow-pill wb-pill-trigger">' +
+            '<span class="wb-flow-label">' + esc(t('triggerStatus')) + '</span>' +
+            '<select class="wb-sel-trigger">' + statusOptions(step.trigger_status || '') + '</select>' +
+            '</div>' +
+            '<div class="wb-flow-arrow" data-behavior="' + esc(step.behavior || 'none') + '">' + arrow + '</div>' +
+            '<div class="wb-flow-pill wb-pill-target">' +
+            '<span class="wb-flow-label">' + esc(t('targetStatus')) + '</span>' +
+            '<select class="wb-sel-target">' + statusOptions(step.target_status || '') + '</select>' +
+            '</div>' +
+            '</div>';
+
+        // Step config: behavior, transfer, label
+        html += '<div class="wb-step-config">';
+
+        // Behavior
+        html += '<div class="wb-step-field">' +
+            '<label class="wb-step-field-label">' + esc(t('behavior')) + '</label>' +
+            '<select class="wb-sel-behavior">' +
+            '<option value="claim"' + (step.behavior === 'claim' ? ' selected' : '') + '>' + esc(t('behaviorClaim')) + '</option>' +
+            '<option value="release"' + (step.behavior === 'release' ? ' selected' : '') + '>' + esc(t('behaviorRelease')) + '</option>' +
+            '<option value="none"' + (step.behavior === 'none' || !step.behavior ? ' selected' : '') + '>' + esc(t('behaviorNone')) + '</option>' +
+            '</select>' +
+            '</div>';
+
+        // Transfer (collapsible)
+        var hasTransfer = !!(step.transfer_dept || step.clear_team);
+        html += '<details class="wb-step-transfer-details"' + (hasTransfer ? ' open' : '') + '>' +
+            '<summary class="wb-step-transfer-summary">' + esc(t('transferTo')) + '</summary>' +
+            '<div class="wb-step-transfer-body">' +
+            '<select class="wb-sel-transfer">' + deptOptions(step.transfer_dept || '') + '</select>' +
+            '<label class="wb-transfer-check">' +
+            '<input type="checkbox" class="wb-clear-team"' + (step.clear_team ? ' checked' : '') + '>' +
+            ' ' + esc(t('clearTeam')) +
+            '</label>' +
+            '</div>' +
+            '</details>';
+
+        // Label
+        html += '<div class="wb-step-field">' +
+            '<label class="wb-step-field-label">' + esc(t('label')) + '</label>' +
+            '<input type="text" class="wb-label-input wb-lbl-step" maxlength="12" ' +
+            'placeholder="' + esc(t('label')) + '" value="' + esc(step.label || '') + '">' +
+            '</div>';
+
+        html += '</div>'; // .wb-step-config
+        html += '</div>'; // .wb-step-row
+
+        return html;
+    }
+
+    // ================================================================
+    //  Step Manipulation
+    // ================================================================
+
+    function getCardSteps(card) {
+        var steps = [];
+        card.querySelectorAll('.wb-step-row').forEach(function(row) {
+            steps.push({
+                trigger_status: row.querySelector('.wb-sel-trigger').value,
+                target_status: row.querySelector('.wb-sel-target').value,
+                behavior: row.querySelector('.wb-sel-behavior').value,
+                transfer_dept: row.querySelector('.wb-sel-transfer').value,
+                clear_team: row.querySelector('.wb-clear-team').checked,
+                label: row.querySelector('.wb-lbl-step').value,
+                icon: '',
+                color: ''
+            });
         });
+        return steps;
+    }
+
+    function setCardSteps(card, steps) {
+        var container = card.querySelector('.wb-steps-container');
+        if (!container) return;
+        container.innerHTML = '';
+        for (var i = 0; i < steps.length; i++) {
+            container.innerHTML += renderStepRow(steps[i], i, steps.length);
+        }
+        // Update add-step button state
+        var addBtn = card.querySelector('.wb-step-add-btn');
+        if (addBtn) addBtn.disabled = steps.length >= MAX_STEPS;
+    }
+
+    function addStep(card) {
+        var steps = getCardSteps(card);
+        if (steps.length >= MAX_STEPS) {
+            toast(t('maxStepsReached'), 'error');
+            return;
+        }
+        var prevStep = steps.length > 0 ? steps[steps.length - 1] : null;
+        steps.push(defaultStep(prevStep));
+        setCardSteps(card, steps);
+        validateCard(card);
+        serializeAllDebounced();
+        markDirty();
+    }
+
+    function removeStep(card, index) {
+        var steps = getCardSteps(card);
+        if (steps.length <= 1) {
+            toast(t('minStepsRequired'), 'error');
+            return;
+        }
+        steps.splice(index, 1);
+        setCardSteps(card, steps);
+        validateCard(card);
+        serializeAllDebounced();
+        markDirty();
+    }
+
+    function moveStep(card, index, direction) {
+        var steps = getCardSteps(card);
+        var newIndex = index + direction;
+        if (newIndex < 0 || newIndex >= steps.length) return;
+        // Swap
+        var temp = steps[index];
+        steps[index] = steps[newIndex];
+        steps[newIndex] = temp;
+        setCardSteps(card, steps);
+        validateCard(card);
+        serializeAllDebounced();
+        markDirty();
     }
 
     // ================================================================
@@ -297,6 +428,7 @@
             updateBadge();
         });
 
+        // Delegated change events on cards container
         document.getElementById('wb-cards').addEventListener('change', function(e) {
             var card = e.target.closest('.wb-card');
             if (!card) return;
@@ -306,21 +438,22 @@
                 updateBadge();
             }
 
-            if (e.target.classList.contains('wb-sel-variant')) {
-                updateVariantVisibility(card);
-            }
-
             if (e.target.classList.contains('wb-template-sel')) {
                 var tpl = e.target.value;
-                if (tpl === 'twostep') {
-                    card.querySelector('.wb-sel-variant').value = 'twostep';
-                    updateVariantVisibility(card);
-                } else if (tpl === 'single') {
-                    card.querySelector('.wb-sel-variant').value = 'single';
-                    updateVariantVisibility(card);
+                if (tpl) {
+                    applyTemplate(card, tpl);
+                    e.target.value = '';
                 }
-                applyTemplate(card, tpl);
-                e.target.value = '';
+            }
+
+            // Update flow arrow when behavior changes
+            if (e.target.classList.contains('wb-sel-behavior')) {
+                var arrowEl = e.target.closest('.wb-step-row').querySelector('.wb-flow-arrow');
+                if (arrowEl) {
+                    var beh = e.target.value;
+                    arrowEl.textContent = behaviorArrow(beh);
+                    arrowEl.dataset.behavior = beh;
+                }
             }
 
             validateCard(card);
@@ -328,21 +461,67 @@
             markDirty();
         });
 
-        document.getElementById('wb-cards').addEventListener('click', function(e) {
-            if (e.target.classList.contains('wb-clone-btn')) {
-                showCloneDialog(e.target.dataset.deptId);
-            }
+        // Delegated input events (for label text fields)
+        document.getElementById('wb-cards').addEventListener('input', function(e) {
+            var card = e.target.closest('.wb-card');
+            if (!card) return;
+            serializeAllDebounced();
+            markDirty();
         });
 
+        // Delegated click events on cards container
         document.getElementById('wb-cards').addEventListener('click', function(e) {
+            var card = e.target.closest('.wb-card');
+            if (!card) return;
+
+            // Clone button
+            if (e.target.classList.contains('wb-clone-btn')) {
+                showCloneDialog(e.target.dataset.deptId);
+                return;
+            }
+
+            // Add step
+            if (e.target.classList.contains('wb-step-add-btn')) {
+                addStep(card);
+                return;
+            }
+
+            // Remove step
+            if (e.target.classList.contains('wb-step-remove-btn')) {
+                var row = e.target.closest('.wb-step-row');
+                if (row) {
+                    removeStep(card, parseInt(row.dataset.stepIndex, 10));
+                }
+                return;
+            }
+
+            // Move up
+            if (e.target.classList.contains('wb-step-move-up')) {
+                var row = e.target.closest('.wb-step-row');
+                if (row) {
+                    moveStep(card, parseInt(row.dataset.stepIndex, 10), -1);
+                }
+                return;
+            }
+
+            // Move down
+            if (e.target.classList.contains('wb-step-move-down')) {
+                var row = e.target.closest('.wb-step-row');
+                if (row) {
+                    moveStep(card, parseInt(row.dataset.stepIndex, 10), 1);
+                }
+                return;
+            }
+
+            // Click on card header (outside toggle) to enable
             if (e.target.closest('.wb-toggle')) return;
             var header = e.target.closest('.wb-card-header');
             if (header) {
                 var cb = header.querySelector('.wb-enabled-cb');
                 if (!cb.checked) {
                     cb.checked = true;
-                    updateCard(cb.closest('.wb-card'));
-                    validateCard(cb.closest('.wb-card'));
+                    updateCard(card);
+                    validateCard(card);
                     serializeAll();
                     markDirty();
                     updateBadge();
@@ -354,18 +533,6 @@
     function updateCard(card) {
         var enabled = card.querySelector('.wb-enabled-cb').checked;
         card.classList.toggle('wb-card-enabled', enabled);
-        updateVariantVisibility(card);
-    }
-
-    function updateVariantVisibility(card) {
-        var variant = (card.querySelector('.wb-sel-variant') || {}).value || 'single';
-        var isTwostep = variant === 'twostep';
-        card.querySelectorAll('.wb-single-only').forEach(function(el) {
-            el.style.display = isTwostep ? 'none' : '';
-        });
-        card.querySelectorAll('.wb-twostep-only').forEach(function(el) {
-            el.style.display = isTwostep ? '' : 'none';
-        });
     }
 
     function updateBadge() {
@@ -390,63 +557,63 @@
 
         if (!card.classList.contains('wb-card-enabled')) return;
 
-        var trigger = card.querySelector('.wb-sel-trigger').value;
-        var working = card.querySelector('.wb-sel-working').value;
-        var done = card.querySelector('.wb-sel-done').value;
-        var variantSel = card.querySelector('.wb-sel-variant');
-        var variant = variantSel ? variantSel.value : 'single';
-
         var warnings = [];
+        var triggers = {};
 
-        // Step 1 validation (both variants)
-        if (!trigger) warnings.push(t('triggerRequired'));
-        if (!working) warnings.push(t('workingRequired'));
-        // Done (stop_target_status) only applies to single-step
-        if (variant !== 'twostep' && !done) warnings.push(t('doneRequired'));
-
-        if (trigger && trigger === working)
-            warnings.push(t('triggerEqualsWorking'));
-        if (variant !== 'twostep' && done && done === trigger)
-            warnings.push(t('doneEqualsTrigger'));
-        if (variant !== 'twostep' && working && working === done)
-            warnings.push(t('workingEqualsDone'));
-
-        // Step 2 validation (twostep only)
-        if (variant === 'twostep') {
-            var s2t = (card.querySelector('.wb-sel-step2-trigger') || {}).value || '';
-            var s2w = (card.querySelector('.wb-sel-step2-working') || {}).value || '';
-            var s2d = (card.querySelector('.wb-sel-final-done') || {}).value || '';
-
-            if (!s2t) warnings.push(t('step2TriggerRequired') || 'Step 2 trigger is required');
-            if (!s2w) warnings.push(t('step2WorkingRequired') || 'Step 2 working is required');
-            if (!s2d) warnings.push(t('finalDoneRequired') || 'Final done is required');
-
-            if (s2t && s2w && s2t === s2w) warnings.push('Step 2: trigger = working (no-op)');
-            if (s2w && s2d && s2w === s2d) warnings.push('Step 2: working = done (no-op)');
-            if (s2d && trigger && s2d === trigger) warnings.push('Final done = Step 1 trigger (loop!)');
-        }
-
-        // Clear pill styling
+        // Clear all pill styling
         card.querySelectorAll('.wb-flow-pill').forEach(function(pill) {
             pill.classList.remove('wb-invalid');
         });
 
-        if (!trigger) card.querySelector('.wb-pill-trigger').classList.add('wb-invalid');
-        if (!working) card.querySelector('.wb-pill-working').classList.add('wb-invalid');
-        if (!done) card.querySelector('.wb-pill-done').classList.add('wb-invalid');
+        var rows = card.querySelectorAll('.wb-step-row');
+        rows.forEach(function(row, idx) {
+            var stepNum = idx + 1;
+            var triggerSel = row.querySelector('.wb-sel-trigger');
+            var targetSel = row.querySelector('.wb-sel-target');
+            var trigger = triggerSel ? triggerSel.value : '';
+            var target = targetSel ? targetSel.value : '';
+            var triggerPill = row.querySelector('.wb-pill-trigger');
+            var targetPill = row.querySelector('.wb-pill-target');
 
-        if (variant === 'twostep') {
-            var s2tEl = card.querySelector('.wb-pill-step2-trigger');
-            var s2wEl = card.querySelector('.wb-pill-step2-working');
-            var s2dEl = card.querySelector('.wb-pill-final-done');
-            var s2t = (card.querySelector('.wb-sel-step2-trigger') || {}).value || '';
-            var s2w = (card.querySelector('.wb-sel-step2-working') || {}).value || '';
-            var s2d = (card.querySelector('.wb-sel-final-done') || {}).value || '';
-            if (!s2t && s2tEl) s2tEl.classList.add('wb-invalid');
-            if (!s2w && s2wEl) s2wEl.classList.add('wb-invalid');
-            if (!s2d && s2dEl) s2dEl.classList.add('wb-invalid');
+            // Required fields
+            if (!trigger) {
+                warnings.push(t('triggerRequired', { n: stepNum }));
+                if (triggerPill) triggerPill.classList.add('wb-invalid');
+            }
+            if (!target) {
+                warnings.push(t('targetRequired', { n: stepNum }));
+                if (targetPill) targetPill.classList.add('wb-invalid');
+            }
+
+            // Trigger must not equal target
+            if (trigger && target && trigger === target) {
+                warnings.push(t('triggerEqualsTarget', { n: stepNum }));
+                if (triggerPill) triggerPill.classList.add('wb-invalid');
+                if (targetPill) targetPill.classList.add('wb-invalid');
+            }
+
+            // Duplicate trigger detection
+            if (trigger) {
+                if (triggers[trigger] !== undefined) {
+                    warnings.push(t('duplicateTrigger', { n: stepNum }));
+                    if (triggerPill) triggerPill.classList.add('wb-invalid');
+                }
+                triggers[trigger] = idx;
+            }
+        });
+
+        // Loop detection: last step's target should not equal first step's trigger
+        if (rows.length >= 2) {
+            var firstTrigger = rows[0].querySelector('.wb-sel-trigger');
+            var lastTarget = rows[rows.length - 1].querySelector('.wb-sel-target');
+            var ft = firstTrigger ? firstTrigger.value : '';
+            var lt = lastTarget ? lastTarget.value : '';
+            if (ft && lt && ft === lt) {
+                warnings.push(t('loopDetected'));
+            }
         }
 
+        // Render warnings
         warnings.forEach(function(w) {
             warnEl.innerHTML += '<div class="wb-warning">' + esc(w) + '</div>';
         });
@@ -459,21 +626,30 @@
     function applyTemplate(card, template) {
         if (!template) return;
 
-        var transfer = card.querySelector('.wb-sel-transfer');
-        var clearTeam = card.querySelector('.wb-clear-team');
-
+        var steps;
         switch (template) {
             case 'single':
-                // Single step: clear step2 fields, keep transfer
+                steps = [
+                    { trigger_status: '', target_status: '', behavior: 'claim', transfer_dept: '', clear_team: false, label: '', icon: '', color: '' },
+                    { trigger_status: '', target_status: '', behavior: 'release', transfer_dept: '', clear_team: false, label: '', icon: '', color: '' }
+                ];
                 break;
             case 'twostep':
-                // Two step: clear transfer (only set on final step done)
-                if (transfer) transfer.value = '';
-                if (clearTeam) clearTeam.checked = false;
+                steps = [
+                    { trigger_status: '', target_status: '', behavior: 'claim', transfer_dept: '', clear_team: false, label: '', icon: '', color: '' },
+                    { trigger_status: '', target_status: '', behavior: 'release', transfer_dept: '', clear_team: false, label: '', icon: '', color: '' },
+                    { trigger_status: '', target_status: '', behavior: 'claim', transfer_dept: '', clear_team: false, label: '', icon: '', color: '' },
+                    { trigger_status: '', target_status: '', behavior: 'release', transfer_dept: '', clear_team: false, label: '', icon: '', color: '' }
+                ];
                 break;
+            default:
+                return;
         }
 
+        setCardSteps(card, steps);
         validateCard(card);
+        serializeAllDebounced();
+        markDirty();
         toast(t('templateApplied'), 'success');
     }
 
@@ -503,20 +679,20 @@
         var targetCard = document.querySelector('.wb-card[data-dept-id="' + targetId + '"]');
         if (!targetCard) return;
 
+        // Copy steps from source to target
+        var sourceSteps = getCardSteps(sourceCard);
         targetCard.querySelector('.wb-enabled-cb').checked = true;
-        targetCard.querySelector('.wb-sel-trigger').value = sourceCard.querySelector('.wb-sel-trigger').value;
-        targetCard.querySelector('.wb-sel-working').value = sourceCard.querySelector('.wb-sel-working').value;
-        targetCard.querySelector('.wb-sel-done').value = sourceCard.querySelector('.wb-sel-done').value;
-        targetCard.querySelector('.wb-sel-transfer').value = sourceCard.querySelector('.wb-sel-transfer').value;
-        targetCard.querySelector('.wb-clear-team').checked = sourceCard.querySelector('.wb-clear-team').checked;
-
+        setCardSteps(targetCard, sourceSteps);
         updateCard(targetCard);
         validateCard(targetCard);
         serializeAll();
         markDirty();
         updateBadge();
 
-        var deptName = D.departments.find(function(d) { return d.id === targetId; }).name;
+        var deptName = '';
+        D.departments.forEach(function(d) {
+            if (d.id === targetId) deptName = d.name;
+        });
         var msg = (T.copiedTo || 'Copied to %s').replace('%s', deptName);
         toast(msg, 'success');
     }
@@ -536,32 +712,13 @@
         document.querySelectorAll('.wb-card').forEach(function(card) {
             var deptId = card.dataset.deptId;
             var enabled = card.querySelector('.wb-enabled-cb').checked;
-            var variant = (card.querySelector('.wb-sel-variant') || {}).value || 'single';
+            var steps = getCardSteps(card);
 
-            var cfg = {
+            existing[deptId] = {
                 enabled: enabled,
-                variant: variant,
-                start_trigger_status: card.querySelector('.wb-sel-trigger').value,
-                start_target_status: card.querySelector('.wb-sel-working').value,
-                stop_target_status: (card.querySelector('.wb-sel-done') || {}).value || '',
-                stop_transfer_dept: card.querySelector('.wb-sel-transfer').value,
-                clear_team: card.querySelector('.wb-clear-team').checked,
-                // Per-department labels
-                start_label: (card.querySelector('.wb-lbl-start') || {}).value || '',
-                stop_label: (card.querySelector('.wb-lbl-stop') || {}).value || ''
+                schema_version: 2,
+                steps: steps
             };
-
-            if (variant === 'twostep') {
-                cfg.step2_trigger_status = (card.querySelector('.wb-sel-step2-trigger') || {}).value || '';
-                cfg.step2_target_status = (card.querySelector('.wb-sel-step2-working') || {}).value || '';
-                cfg.step2_stop_target_status = (card.querySelector('.wb-sel-final-done') || {}).value || '';
-                cfg.step2_clear_team = (card.querySelector('.wb-step2-clear-team') || {}).checked || false;
-                cfg.partial_label = (card.querySelector('.wb-lbl-partial') || {}).value || '';
-                cfg.start2_label = (card.querySelector('.wb-lbl-start2') || {}).value || '';
-                cfg.finish_label = (card.querySelector('.wb-lbl-finish') || {}).value || '';
-            }
-
-            existing[deptId] = cfg;
         });
     }
 

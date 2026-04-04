@@ -50,10 +50,22 @@ class QuickButtonsAjax extends AjaxController {
 
     private static function parseWidgetConfig($config) {
         if (method_exists($config, 'getWidgetConfig'))
-            return $config->getWidgetConfig();
-        $raw = strip_tags($config->get('widget_config') ?: '');
-        $data = @json_decode($raw, true);
-        return is_array($data) ? $data : array();
+            $data = $config->getWidgetConfig();
+        else {
+            $raw = strip_tags($config->get('widget_config') ?: '');
+            $data = @json_decode($raw, true);
+            if (!is_array($data)) $data = array();
+        }
+
+        // Normalize legacy dept configs to v5 steps format at runtime
+        if (!empty($data['departments'])) {
+            foreach ($data['departments'] as $deptId => &$deptCfg) {
+                $deptCfg = QuickButtonsPlugin::normalizeDeptConfig($deptCfg);
+            }
+            unset($deptCfg);
+        }
+
+        return $data;
     }
 
     private static $pluginCache = null;
@@ -225,44 +237,38 @@ class QuickButtonsAjax extends AjaxController {
             'disableAll'        => __('Disable All'),
             'enabledCount'      => __('%d / %d enabled'),
 
-            // Card
-            'trigger'           => __('Trigger'),
-            'working'           => __('Working'),
-            'done'              => __('Done'),
+            // Steps
+            'stepN'             => __('Step %d'),
+            'addStep'           => __('Add Step'),
+            'removeStep'        => __('Remove'),
+            'moveUp'            => __('Move Up'),
+            'moveDown'          => __('Move Down'),
+            'triggerStatus'     => __('Trigger'),
+            'targetStatus'      => __('Target'),
+            'behavior'          => __('Behavior'),
+            'behaviorClaim'     => __('Claim (assign to agent)'),
+            'behaviorRelease'   => __('Release (unassign agent)'),
+            'behaviorNone'      => __('Status change only'),
             'transferTo'        => __('Transfer to:'),
             'clearTeam'         => __('Also clear team assignment'),
+            'label'             => __('Label'),
             'selectStatus'      => __('-- Select --'),
             'selectNone'        => __('-- None --'),
 
-            // Variant
-            'variant'           => __('Variant'),
-            'variantSingle'     => __('Single Step'),
-            'variantTwostep'    => __('Two Step'),
-            'step1'             => __('Step 1'),
-            'step2'             => __('Step 2'),
-            'step2Trigger'      => __('Step 2 Trigger'),
-            'step2Working'      => __('Step 2 Working'),
-            'finalDone'         => __('Final Done'),
-            'partialReady'      => __('Next'),
-            'startStep2'        => __('Start Step 2'),
-
-            // Actions
+            // Templates
             'copyTo'            => __('Copy to...'),
             'applyTemplate'     => __('Apply template...'),
-            'tplSingleStep'     => __('Single Step'),
-            'tplStep1'          => __('Assembly Step 1 (no transfer)'),
-            'tplStep2'          => __('Assembly Step 2 (with transfer)'),
+            'tplSingleStep'     => __('Single Step (2 steps)'),
+            'tplTwoStep'        => __('Two Step (4 steps)'),
 
             // Validation
             'triggerRequired'   => __('Trigger status is required'),
-            'workingRequired'   => __('Working status is required'),
-            'doneRequired'      => __('Done status is required'),
-            'triggerEqualsWorking' => __('Trigger and Working are the same status (Start button will do nothing visible)'),
-            'doneEqualsTrigger' => __('Done status equals Trigger — this creates an infinite loop'),
-            'workingEqualsDone' => __('Working and Done are the same status (Stop button will do nothing visible)'),
-            'step2TriggerRequired' => __('Step 2 trigger status is required'),
-            'step2WorkingRequired' => __('Step 2 working status is required'),
-            'finalDoneRequired' => __('Final done status is required'),
+            'targetRequired'    => __('Target status is required'),
+            'triggerEqualsTarget' => __('Trigger and Target are the same status'),
+            'loopDetected'      => __('Final target equals initial trigger — creates a loop'),
+            'duplicateTrigger'  => __('Duplicate trigger status'),
+            'maxStepsReached'   => __('Maximum 10 steps allowed'),
+            'minStepsRequired'  => __('At least one step is required'),
 
             // Footer
             'noUnsaved'         => __('No unsaved changes'),
@@ -280,7 +286,7 @@ class QuickButtonsAjax extends AjaxController {
             'copyPrompt'        => __('Copy this configuration to which department?'),
             'deptNotFound'      => __('Department not found: %s'),
             'copiedTo'          => __('Copied to %s'),
-            'templateApplied'   => __('Template applied — select statuses for each step'),
+            'templateApplied'   => __('Template applied — adjust statuses for each step'),
             'loading'           => __('Loading dashboard...'),
         );
     }
@@ -356,26 +362,22 @@ class QuickButtonsAjax extends AjaxController {
                 if (empty($deptCfg['enabled'])) continue;
                 if (!in_array($deptId, $agentDepts)) continue;
 
-                $variant = $deptCfg['variant'] ?? self::VARIANT_SINGLE;
-                $deptConfigs[$deptId] = array(
-                    'start_trigger'     => (string) ($deptCfg['start_trigger_status'] ?? ''),
-                    'start_target'      => (string) ($deptCfg['start_target_status'] ?? ''),
-                    'stop_target'       => (string) ($deptCfg['stop_target_status'] ?? ''),
-                    'stop_transfer'     => (string) ($deptCfg['stop_transfer_dept'] ?? ''),
-                    'clear_team'        => !empty($deptCfg['clear_team']),
-                    'variant'           => $variant,
-                    // Two-step fields
-                    'step2_trigger'     => (string) ($deptCfg['step2_trigger_status'] ?? ''),
-                    'step2_target'      => (string) ($deptCfg['step2_target_status'] ?? ''),
-                    'step2_stop_target' => (string) ($deptCfg['step2_stop_target_status'] ?? ''),
-                    'step2_clear_team'  => !empty($deptCfg['step2_clear_team']),
-                    // Per-department labels
-                    'start_label'       => $deptCfg['start_label'] ?? '',
-                    'stop_label'        => $deptCfg['stop_label'] ?? '',
-                    'partial_label'     => $deptCfg['partial_label'] ?? '',
-                    'start2_label'      => $deptCfg['start2_label'] ?? '',
-                    'finish_label'      => $deptCfg['finish_label'] ?? '',
-                );
+                // Already normalized by parseWidgetConfig() — pass steps through
+                $steps = $deptCfg['steps'] ?? array();
+                // Ensure string types for frontend comparison
+                foreach ($steps as &$step) {
+                    $step['trigger_status'] = (string)($step['trigger_status'] ?? '');
+                    $step['target_status']  = (string)($step['target_status'] ?? '');
+                    $step['transfer_dept']  = (string)($step['transfer_dept'] ?? '');
+                    $step['clear_team']     = !empty($step['clear_team']);
+                    $step['label']          = $step['label'] ?? '';
+                    $step['icon']           = $step['icon'] ?? '';
+                    $step['color']          = $step['color'] ?? '';
+                    $step['behavior']       = $step['behavior'] ?? 'none';
+                }
+                unset($step);
+
+                $deptConfigs[$deptId] = array('steps' => $steps);
             }
 
             if (empty($deptConfigs)) continue;
@@ -394,6 +396,13 @@ class QuickButtonsAjax extends AjaxController {
                 'id'               => $instance->getId(),
                 'topic'            => $topicId,
                 'depts'            => $deptConfigs,
+                // Widget-level default colors by behavior (step-level overrides these)
+                'defaultColors'    => array(
+                    'claim'   => $startColor ?: '#128DBE',
+                    'release' => $stopColor ?: '#27ae60',
+                    'none'    => '#e67e22',
+                ),
+                // Legacy aliases for backward compat
                 'startColor'       => $startColor,
                 'stopColor'        => $stopColor,
                 'confirm'          => $confirmMode !== 'none',
@@ -468,16 +477,14 @@ class QuickButtonsAjax extends AjaxController {
             'error'        => __('Error'),
             'confirm'      => __('Confirm'),
             'cancel'       => __('Cancel'),
+            // Generic step confirmation (replaces per-action confirmations)
+            'confirmStep'       => __('Execute "%s" on ticket #%s?'),
+            'countdownStep'     => __('Execute workflow step'),
+            // Legacy aliases kept for backward compat
             'confirmStart' => __('Start working on ticket #%s?'),
             'confirmStop'  => __('Complete and hand off ticket #%s?'),
-            'countdownStart'    => __('Claim ticket and change status to working'),
-            'countdownStop'     => __('Change status, release agent and transfer'),
-            'partialReady'      => __('Next'),
-            'startStep2'        => __('Start Step 2'),
             'confirmPartial'    => __('Mark ticket #%s as partially ready?'),
             'confirmStart2'     => __('Start step 2 on ticket #%s?'),
-            'countdownPartial'  => __('Release agent and mark partially ready'),
-            'countdownStart2'   => __('Claim ticket for step 2'),
             'executingIn'       => __('Executing in %ss...'),
             'undo'         => __('Undo'),
             'undoExpired'  => __('Undo expired'),
@@ -509,20 +516,31 @@ class QuickButtonsAjax extends AjaxController {
     //  API: Execute Action
     // ================================================================
 
+    /**
+     * Map legacy action names to step indices for backward compat.
+     * Only used when frontend sends 'action' instead of 'step_index'.
+     */
+    private static function legacyActionToStepIndex($action, $steps) {
+        $count = count($steps);
+        switch ($action) {
+            case 'start':   return 0;
+            case 'stop':    return $count - 1;
+            case 'partial': return ($count >= 3) ? 1 : $count - 1;
+            case 'start2':  return ($count >= 4) ? 2 : 0;
+        }
+        return null;
+    }
+
     function execute() {
         $thisstaff = $this->requireStaff();
 
         $widgetId = (int) $_POST['widget_id'];
-        $action   = $_POST['action'] ?? '';
         $deptId   = (string) ($_POST['dept_id'] ?? '');
         $tids     = $_POST['tids'] ?? array();
 
         if (!$widgetId)
             Http::response(400, $this->json_encode(
                 array('error' => __('Invalid widget'))));
-        if (!in_array($action, self::VALID_ACTIONS))
-            Http::response(400, $this->json_encode(
-                array('error' => __('Invalid action type'))));
         if (!$tids || !is_array($tids) || !count($tids))
             Http::response(400, $this->json_encode(
                 array('error' => __('No tickets selected'))));
@@ -558,55 +576,35 @@ class QuickButtonsAjax extends AjaxController {
             Http::response(403, $this->json_encode(
                 array('error' => __('Access Denied'))));
 
-        // Resolve targets based on action type
-        $variant = $deptCfg['variant'] ?? self::VARIANT_SINGLE;
-
-        // Reject two-step actions on single-step configs
-        if (in_array($action, array(self::ACTION_PARTIAL, self::ACTION_START2))
-                && $variant !== self::VARIANT_TWOSTEP)
+        // Resolve step from step_index or legacy action param
+        $steps = $deptCfg['steps'] ?? array();
+        if (empty($steps))
             Http::response(400, $this->json_encode(
-                array('error' => __('Two-step actions require two-step variant'))));
+                array('error' => __('No steps configured for this department'))));
 
-        switch ($action) {
-            case self::ACTION_START:
-                $targetStatusId = $deptCfg['start_target_status'] ?? null;
-                $shouldClaim = true;
-                $shouldRelease = false;
-                $transferDept = null;
-                $clearTeam = false;
-                break;
-            case self::ACTION_PARTIAL:
-                $targetStatusId = $deptCfg['step2_trigger_status'] ?? null;
-                $shouldClaim = false;
-                $shouldRelease = true;
-                $transferDept = null;
-                $clearTeam = false;
-                break;
-            case self::ACTION_START2:
-                $targetStatusId = $deptCfg['step2_target_status'] ?? null;
-                $shouldClaim = true;
-                $shouldRelease = false;
-                $transferDept = null;
-                $clearTeam = false;
-                break;
-            case self::ACTION_STOP:
-                $targetStatusId = ($variant === self::VARIANT_TWOSTEP)
-                    ? ($deptCfg['step2_stop_target_status'] ?? null)
-                    : ($deptCfg['stop_target_status'] ?? null);
-                $shouldClaim = false;
-                $shouldRelease = true;
-                $clearTeam = ($variant === self::VARIANT_TWOSTEP)
-                    ? !empty($deptCfg['step2_clear_team'])
-                    : !empty($deptCfg['clear_team']);
-                // Transfer on stop
-                $transferDept = null;
-                if (!empty($deptCfg['stop_transfer_dept'])) {
-                    $transferDept = Dept::lookup($deptCfg['stop_transfer_dept']);
-                    if (!$transferDept)
-                        Http::response(400, $this->json_encode(
-                            array('error' => __('Configured transfer department not found'))));
-                }
-                break;
+        $stepIndex = isset($_POST['step_index']) ? (int)$_POST['step_index'] : null;
+
+        // Backward compat: map legacy 'action' param to step_index
+        if ($stepIndex === null && !empty($_POST['action'])) {
+            $stepIndex = self::legacyActionToStepIndex($_POST['action'], $steps);
+        }
+
+        if ($stepIndex === null || $stepIndex < 0 || $stepIndex >= count($steps))
+            Http::response(400, $this->json_encode(
+                array('error' => __('Invalid step index'))));
+
+        $step = $steps[$stepIndex];
+        $behavior       = $step['behavior'] ?? 'none';
+        $targetStatusId = $step['target_status'] ?? null;
+        $clearTeam      = !empty($step['clear_team']);
+
+        // Resolve transfer department (any step can transfer now)
+        $transferDept = null;
+        if (!empty($step['transfer_dept'])) {
+            $transferDept = Dept::lookup($step['transfer_dept']);
+            if (!$transferDept)
+                Http::response(400, $this->json_encode(
+                    array('error' => __('Configured transfer department not found'))));
         }
 
         $targetStatus = null;
@@ -644,10 +642,9 @@ class QuickButtonsAjax extends AjaxController {
                 'dept_id'   => $ticket->getDeptId(),
             );
 
-            // For release/stop actions: ticket must be assigned to this agent.
-            // Only system administrators (isAdmin) are exempt — regular agents
-            // with canManageTickets (e.g. Expanded Access role) are NOT exempt.
-            if ($shouldRelease && $ticket->getStaffId()
+            // For release actions: ticket must be assigned to this agent.
+            // System administrators (isAdmin) are exempt.
+            if ($behavior === 'release' && $ticket->getStaffId()
                     && (int) $ticket->getStaffId() !== (int) $thisstaff->getId()
                     && !$thisstaff->isAdmin()) {
                 $failed++;
@@ -655,15 +652,34 @@ class QuickButtonsAjax extends AjaxController {
                 continue;
             }
 
-            if ($shouldClaim) {
-                $ok = $this->doStart($ticket, $thisstaff, $targetStatus, $ticketNum, $errors_list);
-            } else {
-                $ok = $this->doStop($ticket, $thisstaff, array(
-                    'targetStatus' => $targetStatus,
-                    'transferDept' => $transferDept,
-                    'clearTeam'    => $clearTeam,
-                    'ticketNum'    => $ticketNum,
-                ), $errors_list);
+            // Execute based on step behavior
+            $ok = false;
+            switch ($behavior) {
+                case 'claim':
+                    $ok = $this->doStart($ticket, $thisstaff, $targetStatus, $ticketNum, $errors_list);
+                    break;
+                case 'release':
+                    $ok = $this->doStop($ticket, $thisstaff, array(
+                        'targetStatus' => $targetStatus,
+                        'transferDept' => $transferDept,
+                        'clearTeam'    => $clearTeam,
+                        'ticketNum'    => $ticketNum,
+                    ), $errors_list);
+                    break;
+                case 'none':
+                default:
+                    // Status change only — no assignment changes
+                    if ($targetStatus) {
+                        $result = $this->actionChangeStatus($ticket, $targetStatus, $thisstaff);
+                        if ($result !== true) {
+                            $errors_list[] = sprintf(__('Ticket #%s: status change failed — %s'), $ticketNum, (string)$result);
+                        } else {
+                            $ok = true;
+                        }
+                    } else {
+                        $ok = true; // No target status = no-op, still counts as success
+                    }
+                    break;
             }
 
             if ($ok) {
@@ -677,10 +693,10 @@ class QuickButtonsAjax extends AjaxController {
         // Store undo data in session (last action only)
         if (!empty($undoData)) {
             $_SESSION['quick_buttons_undo'] = array(
-                'action'   => $action,
-                'tickets'  => $undoData,
-                'time'     => time(),
-                'staff_id' => $thisstaff->getId(),
+                'step_index' => $stepIndex,
+                'tickets'    => $undoData,
+                'time'       => time(),
+                'staff_id'   => $thisstaff->getId(),
             );
         }
 

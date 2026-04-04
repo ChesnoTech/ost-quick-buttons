@@ -104,6 +104,10 @@
             });
         },
 
+        // Default icons and colors by step behavior
+        DEFAULT_ICONS:  { claim: 'icon-play', release: 'emoji:\u2714', none: 'icon-arrow-right' },
+        DEFAULT_COLORS: { claim: '#128DBE', release: '#27ae60', none: '#e67e22' },
+
         resolveButton: function(ticketId) {
             var info = QA.tickets[ticketId];
             if (!info || !info.topic || !info.dept || !info.status) return null;
@@ -117,44 +121,41 @@
                 if (String(w.topic) !== ticketTopic) continue;
 
                 var deptCfg = w.depts[ticketDept];
-                if (!deptCfg) continue;
+                if (!deptCfg || !deptCfg.steps) continue;
 
-                var action = null;
-                var variant = deptCfg.variant || 'single';
+                // Find the step whose trigger_status matches the ticket's current status
+                for (var s = 0; s < deptCfg.steps.length; s++) {
+                    var step = deptCfg.steps[s];
+                    if (String(step.trigger_status) !== ticketStatus) continue;
 
-                if (deptCfg.start_trigger && ticketStatus === String(deptCfg.start_trigger))
-                    action = 'start';
-                else if (deptCfg.start_target && ticketStatus === String(deptCfg.start_target))
-                    action = (variant === 'twostep') ? 'partial' : 'stop';
-                else if (variant === 'twostep' && deptCfg.step2_trigger && ticketStatus === String(deptCfg.step2_trigger))
-                    action = 'start2';
-                else if (variant === 'twostep' && deptCfg.step2_target && ticketStatus === String(deptCfg.step2_target))
-                    action = 'stop';
+                    var behavior = step.behavior || 'none';
+                    var defaults = w.defaultColors || {};
 
-                if (!action) continue;
-                if ((action === 'start' || action === 'start2') && !QA.perms.canAssign) continue;
-                if ((action === 'stop' || action === 'partial') && !QA.perms.canManage) continue;
-                // Release actions: only show if the ticket is assigned to this agent.
-                // System administrators (isAdmin) can see and act on any claimed ticket.
-                if ((action === 'stop' || action === 'partial') && info.staff
-                        && String(info.staff) !== String(QA.perms.staffId || '')
-                        && !QA.perms.isAdmin)
-                    continue;
+                    // Permission checks based on behavior
+                    if (behavior === 'claim' && !QA.perms.canAssign) continue;
+                    if (behavior === 'release' && !QA.perms.canManage) continue;
+                    // Release: only show if ticket is assigned to this agent (admins exempt)
+                    if (behavior === 'release' && info.staff
+                            && String(info.staff) !== String(QA.perms.staffId || '')
+                            && !QA.perms.isAdmin)
+                        continue;
 
-                return {
-                    action: action, widgetId: w.id, deptId: ticketDept,
-                    startColor: w.startColor, stopColor: w.stopColor,
-                    confirm: w.confirm,
-                    confirmMode: w.confirmMode || (w.confirm ? 'confirm' : 'none'),
-                    countdownSeconds: w.countdownSeconds || 5,
-                    labels: {
-                        start: deptCfg.start_label || '',
-                        stop: deptCfg.stop_label || '',
-                        partial: deptCfg.partial_label || '',
-                        start2: deptCfg.start2_label || '',
-                        finish: deptCfg.finish_label || ''
-                    }
-                };
+                    return {
+                        stepIndex: s,
+                        behavior: behavior,
+                        widgetId: w.id,
+                        deptId: ticketDept,
+                        label: step.label || ('Step ' + (s + 1)),
+                        icon: step.icon || QA.DEFAULT_ICONS[behavior] || 'icon-play',
+                        color: step.color || defaults[behavior] || QA.DEFAULT_COLORS[behavior] || '#128DBE',
+                        confirm: w.confirm,
+                        confirmMode: w.confirmMode || (w.confirm ? 'confirm' : 'none'),
+                        countdownSeconds: w.countdownSeconds || 5,
+                        // Keep legacy fields for timer badge logic
+                        isFirstStep: (s === 0),
+                        isLastStep: (s === deptCfg.steps.length - 1),
+                    };
+                }
             }
             return null;
         },
@@ -179,24 +180,15 @@
                 if (!resolved) return;
                 hasAny = true;
 
-                var icon = QA.ICONS[resolved.action];
-                var color = (resolved.action === 'start' && resolved.startColor)
-                    ? resolved.startColor
-                    : (resolved.action === 'stop' && resolved.stopColor)
-                        ? resolved.stopColor
-                        : QA.COLORS[resolved.action];
-                var labelDefaults = {
-                    start: QA.i18n.start, partial: QA.i18n.partialReady,
-                    start2: QA.i18n.startStep2, stop: QA.i18n.done
-                };
-                var label = (resolved.labels && resolved.labels[resolved.action])
-                    || labelDefaults[resolved.action];
+                var icon = resolved.icon;
+                var color = resolved.color;
+                var label = resolved.label;
 
                 var $link = $('<a href="#"></a>')
                     .addClass('qa-inline-btn')
                     .attr({
                         'data-widget-id': resolved.widgetId,
-                        'data-action': resolved.action,
+                        'data-step-index': resolved.stepIndex,
                         'data-dept-id': resolved.deptId,
                         'data-ticket-id': ticketId,
                         'data-confirm-mode': resolved.confirmMode,
@@ -207,10 +199,10 @@
                     .html(QA.renderIcon(icon));
 
                 // Live timer — show as badge above button + tooltip
-                // Stop = "working time" (green), Start = "waiting time" (orange)
+                // Release step = "working time" (green), Claim/first step = "waiting time" (orange)
                 var info = QA.tickets[ticketId];
                 if (info && info.since_secs != null) {
-                    var timerClass = (resolved.action === 'stop' || resolved.action === 'partial')
+                    var timerClass = (resolved.behavior === 'release')
                         ? 'qa-timer-badge qa-timer-working'
                         : 'qa-timer-badge qa-timer-waiting';
                     // since_secs: seconds elapsed at API-fetch time (computed by MySQL TIMESTAMPDIFF).
@@ -432,13 +424,17 @@
             });
         },
 
-        handleBulkAction: function(action) {
+        handleBulkAction: function(bulkType) {
+            // bulkType: 'first' (first step) or 'last' (last step)
             var tids = [];
             $('form#tickets tbody tr input.ckb:checked').each(function() {
                 var tid = $(this).val();
                 if (tid) {
                     var resolved = QA.resolveButton(tid);
-                    if (resolved && resolved.action === action)
+                    if (!resolved) return;
+                    if (bulkType === 'first' && resolved.isFirstStep)
+                        tids.push({ tid: tid, resolved: resolved });
+                    else if (bulkType === 'last' && resolved.isLastStep)
                         tids.push({ tid: tid, resolved: resolved });
                 }
             });
@@ -448,7 +444,7 @@
             var firstResolved = tids[0].resolved;
             var ticketIds = tids.map(function(t) { return t.tid; });
 
-            var message = (action === 'start')
+            var message = (bulkType === 'first')
                 ? QA.i18n.bulkStart + ' (' + tids.length + ')?'
                 : QA.i18n.bulkStop + ' (' + tids.length + ')?';
 
@@ -459,7 +455,7 @@
                 type: 'POST',
                 data: {
                     widget_id: firstResolved.widgetId,
-                    action: action,
+                    step_index: firstResolved.stepIndex,
                     dept_id: firstResolved.deptId,
                     tids: ticketIds
                 },
@@ -535,13 +531,13 @@
             if ($btn.hasClass('qa-loading')) return false;
 
             var widgetId = $btn.data('widget-id');
-            var action = $btn.data('action');
+            var stepIndex = $btn.data('step-index');
             var deptId = $btn.data('dept-id');
             var ticketId = $btn.data('ticket-id');
             var confirmMode = $btn.data('confirmMode') || 'none';
             var countdownSec = parseInt($btn.data('countdown'), 10) || 5;
 
-            if (!widgetId || !action || !ticketId) return false;
+            if (!widgetId || stepIndex === undefined || !ticketId) return false;
             if (QA.executing[ticketId]) return false;
 
             var doExecute = function() {
@@ -555,7 +551,7 @@
                     type: 'POST',
                     data: {
                         widget_id: widgetId,
-                        action: action,
+                        step_index: stepIndex,
                         dept_id: deptId,
                         tids: [ticketId]
                     },
@@ -578,12 +574,9 @@
             var ticketNum = $row.find('a[href*="tickets.php"]').first().text().trim() || ticketId;
 
             if (confirmMode === 'confirm') {
-                var msgMap = {
-                    start: QA.i18n.confirmStart, stop: QA.i18n.confirmStop,
-                    partial: QA.i18n.confirmPartial, start2: QA.i18n.confirmStart2
-                };
-                var template = msgMap[action] || QA.i18n.confirmStart;
-                var message = template.replace('%s', ticketNum);
+                var stepLabel = $btn.attr('title') || ('Step ' + (stepIndex + 1));
+                var template = QA.i18n.confirmStep || 'Execute "%s" on ticket #%s?';
+                var message = template.replace('%s', stepLabel).replace('%s', ticketNum);
 
                 var $dlg = $('<div>').text(message);
                 $dlg.dialog({
@@ -598,7 +591,7 @@
                 });
 
             } else if (confirmMode === 'countdown') {
-                QA.showCountdown($btn, ticketNum, action, countdownSec, doExecute);
+                QA.showCountdown($btn, ticketNum, stepIndex, countdownSec, doExecute);
 
             } else {
                 doExecute();
@@ -634,20 +627,15 @@
         //  Countdown confirmation popup
         // ================================================================
 
-        showCountdown: function($btn, ticketNum, action, seconds, onExecute) {
+        showCountdown: function($btn, ticketNum, stepIndex, seconds, onExecute) {
             $('.qa-countdown-popup').remove();
             $(document).off('click.qa-countdown');
 
             var remaining = seconds;
             var cancelled = false;
-            var colorMap = { start: QA.START_COLOR, partial: QA.PARTIAL_COLOR, start2: QA.START2_COLOR, stop: QA.STOP_COLOR };
-            var descMap = {
-                start: QA.i18n.countdownStart, stop: QA.i18n.countdownStop,
-                partial: QA.i18n.countdownPartial, start2: QA.i18n.countdownStart2
-            };
-            var color = colorMap[action] || QA.START_COLOR;
+            var color = $btn.css('background-color') || '#128DBE';
             var title = '#' + QA.escapeHtml(ticketNum);
-            var desc = descMap[action] || '';
+            var desc = QA.i18n.countdownStep || 'Execute workflow step';
 
             // SVG circular ring (r=16, circumference=2*pi*16=100.53)
             var circumference = 100.53;
@@ -736,17 +724,13 @@
 
     // Event bindings
     $(document).on('click.quick-buttons', '.qa-inline-btn', QA.handleInlineClick);
-    $(document).on('click.quick-buttons', '.qa-bulk-start', function() { QA.handleBulkAction('start'); });
-    $(document).on('click.quick-buttons', '.qa-bulk-partial', function() { QA.handleBulkAction('partial'); });
-    $(document).on('click.quick-buttons', '.qa-bulk-start2', function() { QA.handleBulkAction('start2'); });
-    $(document).on('click.quick-buttons', '.qa-bulk-stop', function() { QA.handleBulkAction('stop'); });
+    $(document).on('click.quick-buttons', '.qa-bulk-start', function() { QA.handleBulkAction('first'); });
+    $(document).on('click.quick-buttons', '.qa-bulk-stop', function() { QA.handleBulkAction('last'); });
 
     // Expose for external integration
     window.QuickButtons = {
-        bulkStart:   function() { QA.handleBulkAction('start'); },
-        bulkPartial: function() { QA.handleBulkAction('partial'); },
-        bulkStart2:  function() { QA.handleBulkAction('start2'); },
-        bulkStop:    function() { QA.handleBulkAction('stop'); }
+        bulkStart: function() { QA.handleBulkAction('first'); },
+        bulkStop:  function() { QA.handleBulkAction('last'); }
     };
 
     // ================================================================
