@@ -313,11 +313,11 @@
             var parts = [];
             parts.push('<span class="qa-ti">\u23F1</span>');
             if (d > 0) {
-                parts.push(R(rh, lH) + '<span class="qa-ts"></span>' + R(d, lD));
+                parts.push(R(d, lD) + '<span class="qa-ts"></span>' + R(rh, lH));
             } else if (h > 0) {
-                parts.push(R(m < 10 ? '0' + m : m, lM) + '<span class="qa-ts"></span>' + R(h, lH));
+                parts.push(R(h, lH) + '<span class="qa-ts"></span>' + R(m < 10 ? '0' + m : m, lM));
             } else if (m > 0) {
-                parts.push(R(s < 10 ? '0' + s : s, lS) + '<span class="qa-ts"></span>' + R(m, lM));
+                parts.push(R(m, lM) + '<span class="qa-ts"></span>' + R(s < 10 ? '0' + s : s, lS));
             } else {
                 parts.push(R(s, lS));
             }
@@ -338,11 +338,11 @@
             var parts = [];
             parts.push('<span class="qa-dl-icon">\u23F3</span>');
             if (d > 0) {
-                parts.push(R(h, lH) + '<span class="qa-ts"></span>' + R(d, lD));
+                parts.push(R(d, lD) + '<span class="qa-ts"></span>' + R(h, lH));
             } else if (h > 0) {
-                parts.push(R(m < 10 ? '0' + m : m, lM) + '<span class="qa-ts"></span>' + R(h, lH));
+                parts.push(R(h, lH) + '<span class="qa-ts"></span>' + R(m < 10 ? '0' + m : m, lM));
             } else if (m > 0) {
-                parts.push(R(s < 10 ? '0' + s : s, lS) + '<span class="qa-ts"></span>' + R(m, lM));
+                parts.push(R(m, lM) + '<span class="qa-ts"></span>' + R(s < 10 ? '0' + s : s, lS));
             } else {
                 parts.push(R(s, lS));
             }
@@ -395,11 +395,11 @@
             var m = Math.floor((totalSec % 3600) / 60);
             var s = totalSec % 60;
             if (d > 0)
-                return h + ' H - ' + d + ' D';
+                return d + ' D - ' + h + ' H';
             if (h > 0)
-                return (m < 10 ? '0' : '') + m + ' M - ' + h + ' H';
+                return h + ' H - ' + (m < 10 ? '0' : '') + m + ' M';
             if (m > 0)
-                return (s < 10 ? '0' : '') + s + ' S - ' + m + ' M';
+                return m + ' M - ' + (s < 10 ? '0' : '') + s + ' S';
             return s + ' S';
         },
 
